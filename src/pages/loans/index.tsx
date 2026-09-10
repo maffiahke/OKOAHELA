@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Banknote, ChevronRight, Loader2 } from "lucide-react";
 import { formatKES } from "@/utils/format";
 import BackButton from "@/components/ui/BackButton";
+import ProductBadge from "@/components/loans/ProductBadge";
 import { api } from "@/lib/client/api";
 
 interface LoanProduct {
@@ -13,6 +14,7 @@ interface LoanProduct {
   feeRate: number;
   periodMonths: number;
   description: string;
+  badge: string | null;
 }
 
 export default function LoanProducts() {
@@ -51,8 +53,11 @@ export default function LoanProducts() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }}
               onClick={() => router.push(`/loans/details?productId=${p.id}`)}
-              className="flex items-center gap-4 rounded-3xl bg-white p-4 text-left shadow-card transition hover:shadow-float"
+              className="relative flex items-center gap-4 rounded-3xl bg-white p-4 text-left shadow-card transition hover:shadow-float"
             >
+              {p.badge && (
+                <ProductBadge label={p.badge} className="absolute -top-2 right-4 shadow-sm" />
+              )}
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-gradient shadow-brand">
                 <Banknote size={22} className="text-white" />
               </div>

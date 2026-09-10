@@ -19,6 +19,7 @@ export default withApi(async (req, res) => {
       periodMonths: p.periodMonths,
       periodOptions: p.periodOptions.split(",").map((s) => parseInt(s, 10)).filter(Boolean),
       description: p.description,
+      badge: p.badge,
     })),
   );
 });

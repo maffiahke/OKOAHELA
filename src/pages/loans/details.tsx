@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Sheet from "@/components/ui/Sheet";
 import MpesaStkModal from "@/components/mpesa/MpesaStkModal";
+import ProductBadge from "@/components/loans/ProductBadge";
 import { formatKES } from "@/utils/format";
 import { api } from "@/lib/client/api";
 import { useToast } from "@/components/ui/Toast";
@@ -23,6 +24,7 @@ interface LoanProduct {
   feeRate: number;
   periodMonths: number;
   description: string;
+  badge: string | null;
 }
 
 const KEY_INFO = [
@@ -150,9 +152,12 @@ export default function LoanDetails() {
         <p className="mt-4 text-3xl font-extrabold tracking-tight text-white">
           {formatKES(product.amount)}
         </p>
-        <span className="mt-3 rounded-full bg-white px-4 py-1.5 text-xs font-bold text-brand-dark">
-          Selected Amount
-        </span>
+        <div className="mt-3 flex items-center gap-2">
+          <span className="rounded-full bg-white px-4 py-1.5 text-xs font-bold text-brand-dark">
+            Selected Amount
+          </span>
+          {product.badge && <ProductBadge label={product.badge} />}
+        </div>
       </motion.div>
 
       {/* Breakdown */}

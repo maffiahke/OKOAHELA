@@ -85,6 +85,7 @@ model LoanProduct {
   periodMonths  Int
   periodOptions String   @default("1,2,3,4,6")
   description   String?
+  badge         String?
   active        Boolean  @default(true)
   sortOrder     Int      @default(0)
   createdAt     DateTime @default(now())

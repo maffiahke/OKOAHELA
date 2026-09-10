@@ -3,17 +3,17 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-const PRODUCTS: { name: string; amount: number; periodMonths: number; description: string }[] = [
-  { name: "Okoa 1K", amount: 1000, periodMonths: 1, description: "Quick top-up for daily needs" },
-  { name: "Okoa 2K", amount: 2000, periodMonths: 1, description: "Small emergency boost" },
-  { name: "Okoa 3K", amount: 3000, periodMonths: 1, description: "Cover bills till payday" },
-  { name: "Okoa 5K", amount: 5000, periodMonths: 2, description: "School fees made simple" },
+const PRODUCTS: { name: string; amount: number; periodMonths: number; description: string; badge?: string }[] = [
+  { name: "Okoa 1K", amount: 1000, periodMonths: 1, description: "Quick top-up for daily needs", badge: "New" },
+  { name: "Okoa 2K", amount: 2000, periodMonths: 1, description: "Small emergency boost", badge: "Popular" },
+  { name: "Okoa 3K", amount: 3000, periodMonths: 1, description: "Cover bills till payday", badge: "Fast Track" },
+  { name: "Okoa 5K", amount: 5000, periodMonths: 2, description: "School fees made simple", badge: "Best Value" },
   { name: "Okoa 7.5K", amount: 7500, periodMonths: 2, description: "Restock your business" },
-  { name: "Okoa 10K", amount: 10000, periodMonths: 3, description: "Bigger emergencies handled" },
+  { name: "Okoa 10K", amount: 10000, periodMonths: 3, description: "Bigger emergencies handled", badge: "Recommended" },
   { name: "Okoa 15K", amount: 15000, periodMonths: 3, description: "Family projects funded" },
   { name: "Okoa 20K", amount: 20000, periodMonths: 4, description: "Grow your hustle" },
   { name: "Okoa 30K", amount: 30000, periodMonths: 6, description: "Business expansion" },
-  { name: "Okoa 50K", amount: 50000, periodMonths: 6, description: "Maximum limit product" },
+  { name: "Okoa 50K", amount: 50000, periodMonths: 6, description: "Maximum limit product", badge: "Max Limit" },
 ];
 
 async function main() {
@@ -69,7 +69,7 @@ async function main() {
     const p = PRODUCTS[i];
     await prisma.loanProduct.upsert({
       where: { id: `seed-product-${p.amount}` },
-      update: {},
+      update: { badge: p.badge ?? null },
       create: {
         id: `seed-product-${p.amount}`,
         name: p.name,
@@ -78,6 +78,7 @@ async function main() {
         periodMonths: p.periodMonths,
         periodOptions: p.periodMonths === 1 ? "1" : p.periodMonths === 2 ? "1,2" : "1,2,3,4,6",
         description: p.description,
+        badge: p.badge ?? null,
         sortOrder: i,
       },
     });
