@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useRouter } from "next/router";
 import { Home, PiggyBank, ReceiptText, UserRound, Wallet } from "lucide-react";
 
@@ -11,6 +12,11 @@ const items = [
 
 export default function BottomNav() {
   const router = useRouter();
+  // Reserve scroll space so the fixed nav never covers page content.
+  useEffect(() => {
+    document.documentElement.classList.add("has-bottom-nav");
+    return () => document.documentElement.classList.remove("has-bottom-nav");
+  }, []);
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)] lg:hidden">
       <div className="mx-auto flex max-w-md items-stretch justify-between rounded-2xl bg-brand-deep px-1 py-1.5 shadow-float mx-4">

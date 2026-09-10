@@ -92,7 +92,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-surface pb-28">
+    <div className="min-h-screen bg-surface pb-6">
       {/* Dark green hero */}
       <div className="relative overflow-hidden rounded-b-[36px] bg-brand-dark px-5 pb-24 pt-8">
         <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-brand-bright/10 blur-2xl" />
@@ -196,8 +196,6 @@ export default function Dashboard() {
           </div>
         </motion.button>
       </div>
-
-      <BottomNav />
     </div>
   );
 }

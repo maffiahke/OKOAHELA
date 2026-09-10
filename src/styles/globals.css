@@ -88,3 +88,13 @@ input[type="number"] {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Space reserved for the fixed bottom nav (mobile only — it hides at lg). */
+html.has-bottom-nav body {
+  padding-bottom: 6.5rem;
+}
+@media (min-width: 1024px) {
+  html.has-bottom-nav body {
+    padding-bottom: 0;
+  }
+}

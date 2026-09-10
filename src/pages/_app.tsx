@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { useEffect } from "react";
 import { SWRConfig } from "swr";
 import { ToastProvider } from "@/components/ui/Toast";
+import BottomNav from "@/components/layout/BottomNav";
 import "@/styles/globals.css";
 
 const fetcher = async (url: string) => {
@@ -39,6 +40,7 @@ export default function App({ Component, pageProps }: AppProps) {
     <SWRConfig value={{ fetcher, revalidateOnFocus: false, shouldRetryOnError: false }}>
       <ToastProvider>
         <Component {...pageProps} />
+        {isAppRoute && <BottomNav />}
       </ToastProvider>
     </SWRConfig>
   );
