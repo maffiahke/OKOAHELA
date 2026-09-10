@@ -29,7 +29,7 @@ export default withApi(async (req, res) => {
     throw new ApiError(422, `Amount exceeds remaining balance of KES ${remaining.toLocaleString()}`);
   }
 
-  const { mpesaTx, demo } = await initiateStkPush({
+  const { mpesaTx, checkoutRequestId } = await initiateStkPush({
     phone: loan.mpesaNumber,
     amount: body.amount,
     purpose: "LOAN_REPAYMENT",
@@ -42,9 +42,8 @@ export default withApi(async (req, res) => {
     res,
     {
       mpesaTransactionId: mpesaTx.id,
-      checkoutRequestId: mpesaTx.checkoutRequestId,
+      checkoutRequestId,
       amount: body.amount,
-      demo,
       message: "Check your phone and enter your M-Pesa PIN.",
     },
     202,

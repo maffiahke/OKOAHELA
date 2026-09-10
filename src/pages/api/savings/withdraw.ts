@@ -3,11 +3,11 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { withApi, ok, requireUser, ApiError } from "@/lib/api";
 import { toMoney } from "@/lib/loans/engine";
-import { initiateStkPush } from "@/lib/mpesa/service";
+import { initiateB2CPayment } from "@/lib/mpesa/service";
 
-// POST /api/savings/withdraw — B2C payout request from savings to M-Pesa.
-// In demo mode the payout is simulated; the balance is debited only when the
-// (simulated) payout callback reports success.
+// POST /api/savings/withdraw — real B2C payout from savings to the customer's
+// M-Pesa. The balance is debited only when the payout settles successfully
+// (callback or b2cquery via /api/mpesa/status).
 export default withApi(async (req, res) => {
   const user = await requireUser(req);
   if (req.method !== "POST") throw new ApiError(405, "Method not allowed");
@@ -27,7 +27,7 @@ export default withApi(async (req, res) => {
   const profile = await prisma.customerProfile.findUnique({ where: { userId: user.id } });
   const phone = profile?.mpesaNumber ?? user.phone;
 
-  const { mpesaTx, demo } = await initiateStkPush({
+  const { mpesaTx, checkoutRequestId } = await initiateB2CPayment({
     phone,
     amount,
     purpose: "SAVINGS_WITHDRAWAL",
@@ -40,9 +40,8 @@ export default withApi(async (req, res) => {
     res,
     {
       mpesaTransactionId: mpesaTx.id,
-      checkoutRequestId: mpesaTx.checkoutRequestId,
+      checkoutRequestId,
       amount,
-      demo,
       message: "Your withdrawal is being processed.",
     },
     202,

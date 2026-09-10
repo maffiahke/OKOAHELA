@@ -47,12 +47,6 @@ export default function Login() {
     }
   };
 
-  const fillDemo = (p: string, pwd: string) => {
-    setPhone(p);
-    setPassword(pwd);
-    setError(null);
-  };
-
   return (
     <main className="flex min-h-screen flex-col bg-surface">
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pb-6 pt-6">
@@ -107,7 +101,7 @@ export default function Login() {
             <div className="mt-1.5 flex justify-end">
               <button
                 type="button"
-                onClick={() => show("Password resets are handled by support in this demo.", "info")}
+                onClick={() => router.push("/forgot-password")}
                 className="text-[13px] font-bold text-brand hover:underline"
               >
                 Forgot Password?
@@ -136,31 +130,6 @@ export default function Login() {
             </Link>
           </p>
         </form>
-
-        {/* Demo accounts */}
-        <div className="mt-6 rounded-2xl border border-dashed border-brand/40 bg-brand-soft/60 p-4">
-          <p className="text-center text-xs font-bold uppercase tracking-wide text-brand-dark">
-            Demo accounts
-          </p>
-          <div className="mt-2.5 flex flex-col gap-2 text-[13px]">
-            <button
-              type="button"
-              onClick={() => fillDemo("254712345678", "Demo@2024")}
-              className="flex items-center justify-between rounded-xl bg-white px-3.5 py-2.5 text-left shadow-card transition hover:bg-gray-50"
-            >
-              <span className="font-semibold text-ink">Customer · Jay Venas</span>
-              <span className="font-medium text-gray-400">Tap to fill</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => fillDemo("254700000001", "Admin@2024")}
-              className="flex items-center justify-between rounded-xl bg-white px-3.5 py-2.5 text-left shadow-card transition hover:bg-gray-50"
-            >
-              <span className="font-semibold text-ink">Admin · Okoahela</span>
-              <span className="font-medium text-gray-400">Tap to fill</span>
-            </button>
-          </div>
-        </div>
 
         <div className="flex-1" />
 

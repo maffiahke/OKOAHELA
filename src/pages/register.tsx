@@ -77,7 +77,7 @@ export default function Register() {
       const res = await api.post<{
         userId: string;
         phone: string;
-        demoOtp?: string;
+        otp?: string;
       }>("/api/auth/register", {
         fullName: form.fullName.trim(),
         phone: form.phone.trim(),
@@ -89,7 +89,7 @@ export default function Register() {
         acceptPrivacy: true,
       });
       const q = new URLSearchParams({ userId: res.userId, phone: res.phone });
-      if (res.demoOtp) q.set("demoOtp", res.demoOtp);
+      if (res.otp) q.set("otp", res.otp);
       router.push(`/verify?${q.toString()}`);
     } catch (err) {
       setErrors({ form: err instanceof Error ? err.message : "Registration failed" });

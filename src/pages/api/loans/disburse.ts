@@ -1,13 +1,12 @@
-import { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { withApi, ok, requireUser, ApiError } from "@/lib/api";
 import { toMoney } from "@/lib/loans/engine";
-import { isDemoMode } from "@/lib/mpesa/service";
+import { initiateB2CPayment } from "@/lib/mpesa/service";
 
-// POST /api/loans/disburse — confirm disbursement of an approved application.
-// In demo mode this creates a simulated M-Pesa disbursement the UI settles via
-// the STK modal (demo-complete). In live mode a real B2C payout would fire here.
+// POST /api/loans/disburse — pay out an approved application to the customer's
+// M-Pesa via a real Daraja B2C transaction. The loan is only marked disbursed
+// when the payout settles (callback or b2cquery through /api/mpesa/status).
 export default withApi(async (req, res) => {
   const user = await requireUser(req);
   if (req.method !== "POST") throw new ApiError(405, "Method not allowed");
@@ -18,36 +17,41 @@ export default withApi(async (req, res) => {
     where: { id: body.applicationId, userId: user.id },
   });
   if (!application) throw new ApiError(404, "Application not found");
-  if (application.status === "DISBURSED") return ok(res, { alreadyDisbursed: true });
+  if (application.status === "DISBURSED") {
+    return ok(res, { alreadyDisbursed: true, checkoutRequestId: null });
+  }
   if (application.status !== "APPROVED") {
-    throw new ApiError(409, `Application is ${application.status.toLowerCase()}; disbursement not available yet`);
+    throw new ApiError(
+      409,
+      `Application is ${application.status.toLowerCase()}; disbursement not available yet`,
+    );
   }
 
-  const checkoutRequestId = `ws_CO_B2C_${Date.now().toString(36).toUpperCase()}`;
-  const mpesaTx = await prisma.mpesaTransaction.create({
-    data: {
-      reference: `MPX-B2C-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 900 + 100)}`,
-      mode: isDemoMode ? "DEMO" : "LIVE",
-      type: "B2C_DISBURSEMENT",
-      purpose: "LOAN_DISBURSEMENT",
-      phone: application.mpesaNumber,
-      amount: application.amount,
-      status: "PENDING",
-      relatedType: "LoanApplication",
-      relatedId: application.id,
-      checkoutRequestId,
-      simulated: isDemoMode,
-    },
+  // Re-use an in-flight payout if one was already started for this application.
+  const existing = await prisma.mpesaTransaction.findFirst({
+    where: { purpose: "LOAN_DISBURSEMENT", relatedId: application.id, status: "PENDING" },
   });
+
+  const mpesaTx =
+    existing ??
+    (
+      await initiateB2CPayment({
+        phone: application.mpesaNumber,
+        amount: toMoney(application.amount),
+        purpose: "LOAN_DISBURSEMENT",
+        relatedType: "LoanApplication",
+        relatedId: application.id,
+        description: "Loan disbursement",
+      })
+    ).mpesaTx;
 
   ok(
     res,
     {
       mpesaTransactionId: mpesaTx.id,
-      checkoutRequestId,
+      checkoutRequestId: mpesaTx.checkoutRequestId,
       amount: toMoney(application.amount),
-      demo: isDemoMode,
-      message: "Disbursement initiated. Confirm on your phone.",
+      message: "Disbursement initiated. Watch for the M-Pesa message on your phone.",
     },
     202,
   );

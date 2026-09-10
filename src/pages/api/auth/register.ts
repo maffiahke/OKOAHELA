@@ -58,8 +58,8 @@ export default withApi(async (req, res) => {
     },
   });
 
-  // Create OTP. In production this would go through an SMS gateway and never
-  // be returned to the client; demo mode returns it so the flow is testable.
+  // Activation OTP: generated randomly server-side and surfaced to the verify
+  // screen (which auto-fills it) since this deployment has no SMS gateway.
   const code = generateOtp();
   await prisma.otpVerification.create({
     data: {
@@ -75,5 +75,5 @@ export default withApi(async (req, res) => {
     data: { actorId: user.id, actorRole: "CUSTOMER", action: "REGISTRATION_STARTED", entityType: "User", entityId: user.id },
   });
 
-  ok(res, { userId: user.id, phone: data.phone, demoOtp: process.env.DEMO_MODE === "false" ? undefined : code }, 201);
+  ok(res, { userId: user.id, phone: data.phone, otp: code }, 201);
 });

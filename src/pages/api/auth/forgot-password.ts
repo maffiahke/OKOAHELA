@@ -5,17 +5,16 @@ import { hashOtp, generateOtp } from "@/lib/auth/session";
 import { rateLimit, withApi, ok, ApiError } from "@/lib/api";
 import { phoneSchema } from "@/lib/validation/schemas";
 
-// Resend OTP for registration. Rate limited; issues a fresh code.
+// POST /api/auth/forgot-password — issue a password-reset code for a phone.
+// Same delivery model as registration OTPs: generated server-side and surfaced
+// to the reset screen (no SMS gateway in this deployment).
 export default withApi(async (req, res) => {
   if (req.method !== "POST") throw new ApiError(405, "Method not allowed");
-  rateLimit(req, "resend-otp", 3, 60_000);
+  rateLimit(req, "forgot-password", 3, 60_000);
 
-  const body = z.object({ userId: z.string().min(1) }).parse(req.body);
-  const user = await prisma.user.findUnique({ where: { id: body.userId } });
-  if (!user) throw new ApiError(404, "Account not found");
-  if (user.status !== "PENDING_VERIFICATION") {
-    throw new ApiError(409, "This account is already verified. Please log in.", "ALREADY_VERIFIED");
-  }
+  const data = z.object({ phone: phoneSchema }).parse(req.body);
+  const user = await prisma.user.findUnique({ where: { phone: data.phone } });
+  if (!user) throw new ApiError(404, "No account found with that phone number");
 
   const code = generateOtp();
   await prisma.otpVerification.create({
@@ -23,10 +22,10 @@ export default withApi(async (req, res) => {
       userId: user.id,
       phone: user.phone,
       codeHash: hashOtp(code),
-      purpose: "REGISTRATION",
+      purpose: "PASSWORD_RESET",
       expiresAt: new Date(Date.now() + 10 * 60_000),
     },
   });
 
-  ok(res, { resent: true, otp: code });
+  ok(res, { userId: user.id, otp: code });
 });

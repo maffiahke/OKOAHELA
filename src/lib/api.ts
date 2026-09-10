@@ -52,8 +52,8 @@ export function withApi(handler: Handler): Handler {
   };
 }
 
-// Simple in-memory rate limiter keyed by ip+bucket. Suitable for dev/demo;
-// swap for a shared store (e.g. Redis) behind a load balancer in production.
+// Simple in-memory rate limiter keyed by ip+bucket. Fine for a single
+// instance; swap for a shared store (e.g. Redis) behind a load balancer.
 const buckets = new Map<string, { count: number; resetAt: number }>();
 
 export function rateLimit(req: NextApiRequest, bucket: string, limit: number, windowMs: number) {

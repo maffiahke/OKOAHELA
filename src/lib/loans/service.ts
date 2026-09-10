@@ -66,7 +66,7 @@ export async function applyForLoan(input: ApplyLoanInput) {
       monthlyRepayment: new Prisma.Decimal(quote.monthlyRepayment),
       periodMonths: quote.periodMonths,
       mpesaNumber: input.mpesaNumber,
-      // Auto-approve small loans instantly (demo policy; configurable).
+      // Auto-approve small loans instantly (policy threshold; configurable).
       status: quote.amount <= AUTO_APPROVE_THRESHOLD ? "APPROVED" : "PENDING",
       reviewedBy: quote.amount <= AUTO_APPROVE_THRESHOLD ? "SYSTEM" : null,
       reviewedAt: quote.amount <= AUTO_APPROVE_THRESHOLD ? new Date() : null,

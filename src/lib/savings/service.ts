@@ -31,7 +31,7 @@ export async function applySavingsDeposit(userId: string, amount: number, mpesaR
         amount: new Prisma.Decimal(amount),
         balanceAfter: new Prisma.Decimal(newBalance),
         status: "SUCCESSFUL",
-        description: `M-Pesa deposit${mpesaReceipt ? ` (Receipt ${mpesaReceipt})` : " (simulated)"}`,
+        description: `M-Pesa deposit${mpesaReceipt ? ` (Receipt ${mpesaReceipt})` : ""}`,
       },
     });
 
@@ -44,7 +44,7 @@ export async function applySavingsDeposit(userId: string, amount: number, mpesaR
         direction: "CREDIT",
         amount: new Prisma.Decimal(amount),
         status: "SUCCESSFUL",
-        description: `Savings deposit${mpesaReceipt ? ` (Receipt ${mpesaReceipt})` : " (simulated)"}`,
+        description: `Savings deposit${mpesaReceipt ? ` (Receipt ${mpesaReceipt})` : ""}`,
         relatedType: "SavingsAccount",
         relatedId: account.id,
       },
@@ -85,7 +85,7 @@ export async function applySavingsWithdrawal(userId: string, amount: number, mpe
         amount: new Prisma.Decimal(amount),
         balanceAfter: new Prisma.Decimal(newBalance),
         status: "SUCCESSFUL",
-        description: `M-Pesa withdrawal${mpesaReceipt ? ` (Receipt ${mpesaReceipt})` : " (simulated)"}`,
+        description: `M-Pesa withdrawal${mpesaReceipt ? ` (Receipt ${mpesaReceipt})` : ""}`,
       },
     });
 
@@ -98,7 +98,7 @@ export async function applySavingsWithdrawal(userId: string, amount: number, mpe
         direction: "DEBIT",
         amount: new Prisma.Decimal(amount),
         status: "SUCCESSFUL",
-        description: `Savings withdrawal${mpesaReceipt ? ` (Receipt ${mpesaReceipt})` : " (simulated)"}`,
+        description: `Savings withdrawal${mpesaReceipt ? ` (Receipt ${mpesaReceipt})` : ""}`,
         relatedType: "SavingsAccount",
         relatedId: account.id,
       },

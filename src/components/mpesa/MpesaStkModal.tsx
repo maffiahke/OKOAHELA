@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Smartphone, X, Send } from "lucide-react";
 import Sheet from "@/components/ui/Sheet";
-import { api, ApiClientError } from "@/lib/client/api";
+import { api } from "@/lib/client/api";
 import { formatPhoneDisplay } from "@/lib/validation/schemas";
 
 type Stage = "waiting" | "success" | "failed";
@@ -13,15 +13,15 @@ interface Props {
   amount: number | null;
   phone?: string;
   label?: string;
-  onDone: () => void; // success settled — parent should refresh data
+  onDone: () => void; // settled — parent should refresh data
   onFailed?: () => void;
   onClose: () => void;
 }
 
-// Simulates the customer confirming on their phone after a short delay.
-const DEMO_SETTLE_DELAY_MS = 3500;
-
-const STEPS = ["Send STK push", "Enter M-Pesa PIN", "Confirm payment"];
+const STEPS_PAYBILL = ["Open the M-Pesa prompt", "Enter your M-Pesa PIN", "Confirm payment"];
+const STEPS_PAYOUT = ["Request sent to Safaricom", "Money arrives in your M-Pesa", "Confirmation SMS"];
+const POLL_INTERVAL_MS = 1500;
+const TIMEOUT_MS = 5 * 60 * 1000;
 
 export default function MpesaStkModal({
   open,
@@ -35,23 +35,24 @@ export default function MpesaStkModal({
 }: Props) {
   const [stage, setStage] = useState<Stage>("waiting");
   const [receipt, setReceipt] = useState<string | null>(null);
-  const [reason, setReason] = useState<string>("Unable to complete payment. Please try again.");
-  const [busy, setBusy] = useState(false);
+  const [reason, setReason] = useState<string>("Unable to complete the payment. Please try again.");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const demoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settledRef = useRef(false);
+
+  const payout = /disbursement|withdrawal|payout/i.test(label);
 
   const stopTimers = () => {
     if (pollRef.current) clearInterval(pollRef.current);
-    if (demoTimer.current) clearTimeout(demoTimer.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     pollRef.current = null;
-    demoTimer.current = null;
+    timeoutRef.current = null;
   };
 
   const checkStatus = useCallback(async () => {
     if (!checkoutRequestId || settledRef.current) return;
     try {
-      const tx = await api.get<{ status: string; receipt: string | null }>(
+      const tx = await api.get<{ status: string; receipt: string | null; resultDesc: string | null }>(
         `/api/mpesa/status?checkoutRequestId=${encodeURIComponent(checkoutRequestId)}`,
       );
       if (tx.status === "SUCCESS" && !settledRef.current) {
@@ -63,11 +64,12 @@ export default function MpesaStkModal({
       } else if (tx.status === "FAILED" && !settledRef.current) {
         settledRef.current = true;
         stopTimers();
+        if (tx.resultDesc) setReason(tx.resultDesc);
         setStage("failed");
         onFailed?.();
       }
     } catch {
-      /* keep polling */
+      /* keep polling — transient network/server errors */
     }
   }, [checkoutRequestId, onDone, onFailed]);
 
@@ -77,37 +79,30 @@ export default function MpesaStkModal({
     setStage("waiting");
     setReceipt(null);
 
-    // Demo: auto-complete after a delay (simulates user entering PIN).
-    demoTimer.current = setTimeout(() => {
-      api
-        .post("/api/mpesa/demo-complete", { checkoutRequestId, outcome: "SUCCESS" })
-        .catch(() => {});
-    }, DEMO_SETTLE_DELAY_MS);
-
-    pollRef.current = setInterval(checkStatus, 1200);
+    void checkStatus();
+    pollRef.current = setInterval(checkStatus, POLL_INTERVAL_MS);
+    timeoutRef.current = setTimeout(() => {
+      if (settledRef.current) return;
+      settledRef.current = true;
+      stopTimers();
+      setReason(
+        payout
+          ? "The payout is still processing on Safaricom's side. We'll confirm it automatically once it settles."
+          : "We didn't get a response in time. If you already entered your PIN, the payment will confirm automatically.",
+      );
+      setStage("failed");
+      onFailed?.();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, TIMEOUT_MS);
     return stopTimers;
   }, [open, checkoutRequestId, checkStatus]);
-
-  const retry = async () => {
-    setStage("waiting");
-    settledRef.current = false;
-    setBusy(true);
-    try {
-      await api.post("/api/mpesa/demo-complete", { checkoutRequestId, outcome: "SUCCESS" });
-      // polling picks up success
-    } catch (e) {
-      if (e instanceof ApiClientError && e.status !== 409) setStage("failed");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <Sheet
       open={open}
       onClose={onClose}
       persistent={stage === "waiting"}
-      title={stage === "waiting" ? "M-Pesa Payment" : undefined}
+      title={stage === "waiting" ? (payout ? "M-Pesa Payout" : "M-Pesa Payment") : undefined}
     >
       <AnimatePresence mode="wait">
         {stage === "waiting" && (
@@ -122,7 +117,7 @@ export default function MpesaStkModal({
             <div className="flex items-center justify-between rounded-3xl bg-brand-gradient p-5 shadow-brand">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">
-                  {label === "loan disbursement" ? "Loan Amount" : "Amount"}
+                  {payout ? "Amount to Receive" : "Amount"}
                 </p>
                 <p className="mt-1 text-2xl font-extrabold tracking-tight text-white">
                   KES {amount?.toLocaleString() ?? "—"}
@@ -133,13 +128,15 @@ export default function MpesaStkModal({
               </div>
             </div>
 
-            {/* STK push card */}
+            {/* Request card */}
             <div className="mt-3 rounded-3xl bg-white p-5 shadow-card">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-extrabold text-ink">STK Push to M-Pesa</p>
+                  <p className="text-sm font-extrabold text-ink">
+                    {payout ? "Sending to your M-Pesa" : "STK Push to M-Pesa"}
+                  </p>
                   <p className="mt-1 text-[13px] leading-relaxed text-gray-500">
-                    We will send an M-Pesa request to{" "}
+                    {payout ? "The money is on its way to " : "We will send an M-Pesa request to "}
                     <span className="font-bold text-ink">
                       {phone ? formatPhoneDisplay(phone) : "your number"}
                     </span>
@@ -158,13 +155,8 @@ export default function MpesaStkModal({
               </div>
 
               <ol className="mt-4 flex flex-col gap-2.5">
-                {STEPS.map((s, i) => (
-                  <li key={s} className="flex items-center gap-3">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[11px] font-bold text-brand-dark">
-                      {i + 1}
-                    </span>
-                    <span className="text-[13px] font-semibold text-gray-600">{s}</span>
-                  </li>
+                {(payout ? STEPS_PAYOUT : STEPS_PAYBILL).map((s, i) => (
+                  <Step key={s} s={s} i={i} />
                 ))}
               </ol>
             </div>
@@ -183,18 +175,10 @@ export default function MpesaStkModal({
                   ))}
                 </span>
                 <span className="text-xs font-bold text-brand-dark">
-                  Waiting for your M-Pesa PIN...
+                  {payout ? "Processing your payout..." : "Waiting for your M-Pesa PIN..."}
                 </span>
               </div>
             </div>
-
-            <button
-              onClick={retry}
-              disabled={busy}
-              className="mt-4 w-full text-center text-xs font-bold text-gray-400 underline-offset-2 transition hover:text-brand hover:underline disabled:opacity-50"
-            >
-              Simulate M-Pesa PIN entry now
-            </button>
           </motion.div>
         )}
 
@@ -241,26 +225,30 @@ export default function MpesaStkModal({
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-red-100">
               <X size={38} className="text-red-500" strokeWidth={2.6} />
             </div>
-            <h3 className="mt-5 text-lg font-extrabold text-ink">STK Failed</h3>
+            <h3 className="mt-5 text-lg font-extrabold text-ink">
+              {payout ? "Payout Pending" : "Payment Not Completed"}
+            </h3>
             <p className="mt-2 max-w-[280px] text-sm leading-relaxed text-gray-500">{reason}</p>
-            <div className="mt-6 flex w-full gap-3">
-              <button
-                onClick={onClose}
-                className="w-full rounded-2xl border border-gray-200 bg-white py-3.5 text-sm font-bold text-ink transition hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={retry}
-                disabled={busy}
-                className="w-full rounded-2xl bg-brand py-3.5 text-sm font-bold text-white shadow-brand transition hover:bg-mid disabled:opacity-60"
-              >
-                {busy ? "Retrying..." : "Retry"}
-              </button>
-            </div>
+            <button
+              onClick={onClose}
+              className="mt-6 w-full rounded-2xl bg-brand py-4 text-base font-bold text-white shadow-brand transition hover:bg-mid active:scale-[0.98]"
+            >
+              Close
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
     </Sheet>
+  );
+}
+
+function Step({ s, i }: { s: string; i: number }) {
+  return (
+    <li className="flex items-center gap-3">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[11px] font-bold text-brand-dark">
+        {i + 1}
+      </span>
+      <span className="text-[13px] font-semibold text-gray-600">{s}</span>
+    </li>
   );
 }

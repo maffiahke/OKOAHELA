@@ -19,7 +19,7 @@ export default withApi(async (req, res) => {
   const profile = await prisma.customerProfile.findUnique({ where: { userId: user.id } });
   const phone = profile?.mpesaNumber ?? user.phone;
 
-  const { mpesaTx, demo } = await initiateStkPush({
+  const { mpesaTx, checkoutRequestId } = await initiateStkPush({
     phone,
     amount,
     purpose: "SAVINGS_DEPOSIT",
@@ -32,9 +32,8 @@ export default withApi(async (req, res) => {
     res,
     {
       mpesaTransactionId: mpesaTx.id,
-      checkoutRequestId: mpesaTx.checkoutRequestId,
+      checkoutRequestId,
       amount,
-      demo,
       message: "Check your phone and enter your M-Pesa PIN.",
     },
     202,

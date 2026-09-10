@@ -1,24 +1,14 @@
 import { prisma } from "@/lib/db";
-import { randomToken } from "@/lib/auth/session";
+import { ApiError } from "@/lib/api";
 import { Prisma } from "@prisma/client";
 
-// ── M-Pesa service ──────────────────────────────────────────────────────────
-// DEMO MODE: when DEMO_MODE=true (or Daraja credentials are absent), STK push
-// and B2C disbursements are simulated server-side. Simulated transactions are
-// always flagged mode="DEMO" + simulated=true so they can never be confused
-// with production financial records.
-//
-// LIVE MODE: real Daraja OAuth + STK Push (CustomerBuyGoodsOnline style for
-// till / Paybill STK). Callback handling is identical for both modes: the
-// /api/mpesa/callback endpoint validates, de-duplicates (idempotency via
-// checkoutRequestId), then applies the financial effect in a DB transaction.
-
-const DEMO_MODE =
-  process.env.DEMO_MODE === "true" ||
-  !process.env.MPESA_CONSUMER_KEY ||
-  !process.env.MPESA_CONSUMER_SECRET;
-
-export const isDemoMode = DEMO_MODE;
+// ── M-Pesa service (live Daraja only) ───────────────────────────────────────
+// Real Safaricom Daraja integration: OAuth, STK Push, B2C payouts and the
+// result-query APIs. Environment is selected with MPESA_ENV
+// ("production" → api.safaricom.co.ke, anything else → sandbox).
+// Transactions settle via the /api/mpesa/callback endpoint or, when the
+// callback has not arrived yet, via Daraja's query APIs polled by
+// /api/mpesa/status. Financial effects are applied only in lib/mpesa/settle.
 
 export type MpesaPurpose =
   | "LOAN_DISBURSEMENT"
@@ -35,83 +25,97 @@ interface StkRequest {
   description: string;
 }
 
-async function darajaToken(): Promise<string | null> {
-  if (DEMO_MODE) return null;
-  try {
-    const auth = Buffer.from(
-      `${process.env.MPESA_CONSUMER_KEY}:${process.env.MPESA_CONSUMER_SECRET}`,
-    ).toString("base64");
-    const res = await fetch(
-      `https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials`,
-      { method: "GET", headers: { Authorization: `Basic ${auth}` } },
+interface DarajaConfig {
+  baseUrl: string;
+  key: string;
+  secret: string;
+  shortcode: string;
+  passkey: string;
+  callbackUrl: string;
+  env: "production" | "sandbox";
+}
+
+export function mpesaConfig(): DarajaConfig {
+  const env = process.env.MPESA_ENV === "production" ? "production" : "sandbox";
+  const cfg: DarajaConfig = {
+    env,
+    baseUrl: env === "production" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke",
+    key: process.env.MPESA_CONSUMER_KEY ?? "",
+    secret: process.env.MPESA_CONSUMER_SECRET ?? "",
+    shortcode: process.env.MPESA_SHORTCODE ?? "",
+    passkey: process.env.MPESA_PASSKEY ?? "",
+    callbackUrl: process.env.MPESA_CALLBACK_URL ?? "",
+  };
+  if (!cfg.key || !cfg.secret) {
+    throw new ApiError(
+      503,
+      "M-Pesa is not configured yet — add your Daraja consumer key/secret to the server environment.",
     );
-    const data = (await res.json()) as { access_token?: string };
-    return data.access_token ?? null;
-  } catch {
-    return null;
   }
+  return cfg;
+}
+
+let tokenCache: { token: string; expiresAt: number } | null = null;
+
+async function darajaToken(cfg: DarajaConfig): Promise<string> {
+  if (tokenCache && tokenCache.expiresAt > Date.now() + 30_000) return tokenCache.token;
+  const auth = Buffer.from(`${cfg.key}:${cfg.secret}`).toString("base64");
+  const res = await fetch(`${cfg.baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
+    method: "GET",
+    headers: { Authorization: `Basic ${auth}` },
+  });
+  const data = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: string };
+  if (!res.ok || !data.access_token) {
+    throw new ApiError(502, "M-Pesa authentication failed. Check your Daraja consumer credentials.");
+  }
+  tokenCache = { token: data.access_token, expiresAt: Date.now() + Number(data.expires_in ?? 3600) * 1000 };
+  return tokenCache.token;
+}
+
+function stkTimestamp(): string {
+  const d = new Date();
+  const pad = (n: number, w = 2) => String(n).padStart(w, "0");
+  return (
+    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}` +
+    `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}${pad(d.getMilliseconds(), 3)}`
+  );
 }
 
 export async function initiateStkPush(req: StkRequest) {
+  const cfg = mpesaConfig();
+  if (!cfg.shortcode || !cfg.passkey) {
+    throw new ApiError(503, "M-Pesa is missing the shortcode/passkey configuration.");
+  }
+  if (!cfg.callbackUrl) {
+    throw new ApiError(
+      503,
+      "M-Pesa callback URL is not configured (MPESA_CALLBACK_URL must be publicly reachable over HTTPS).",
+    );
+  }
+
   const reference = `MPX-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 900 + 100)}`;
-  const shortCode = process.env.MPESA_SHORTCODE || "174379";
-  const passkey = process.env.MPESA_PASSKEY || "";
-  const timestamp = new Date()
-    .toISOString()
-    .replace(/[-T:.]/g, "")
-    .slice(0, 14);
-  const checkoutRequestId = `ws_CO_${Date.now()}DEMO`;
+  const timestamp = stkTimestamp();
+  const password = Buffer.from(`${cfg.shortcode}${cfg.passkey}${timestamp}`).toString("base64");
 
-  const mpesaTx = await prisma.mpesaTransaction.create({
-    data: {
-      reference,
-      mode: DEMO_MODE ? "DEMO" : "LIVE",
-      type: "STK_PUSH",
-      purpose: req.purpose,
-      phone: req.phone,
-      amount: new Prisma.Decimal(req.amount),
-      status: "PENDING",
-      relatedType: req.relatedType,
-      relatedId: req.relatedId,
-      checkoutRequestId: DEMO_MODE ? checkoutRequestId : null,
-      simulated: DEMO_MODE,
-    },
-  });
-
-  if (DEMO_MODE) {
-    return { mpesaTx, demo: true as const, checkoutRequestId };
-  }
-
-  // Live Daraja STK push
-  const token = await darajaToken();
-  if (!token) {
-    await prisma.mpesaTransaction.update({
-      where: { id: mpesaTx.id },
-      data: { status: "FAILED", resultDesc: "Could not authenticate with Daraja" },
-    });
-    throw new Error("M-Pesa is temporarily unavailable. Please try again.");
-  }
-
-  const callbackUrl = process.env.MPESA_CALLBACK_URL || "";
-  const password = Buffer.from(`${shortCode}${passkey}${timestamp}`).toString("base64");
-  const res = await fetch(`https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest`, {
+  const token = await darajaToken(cfg);
+  const res = await fetch(`${cfg.baseUrl}/mpesa/stkpush/v1/processrequest`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      BusinessShortCode: shortCode,
+      BusinessShortCode: cfg.shortcode,
       Password: password,
       Timestamp: timestamp,
       TransactionType: "CustomerPayBillOnline",
-      Amount: req.amount,
+      Amount: Math.round(req.amount),
       PartyA: req.phone,
-      PartyB: shortCode,
+      PartyB: cfg.shortcode,
       PhoneNumber: req.phone,
-      CallBackURL: callbackUrl,
+      CallBackURL: cfg.callbackUrl,
       AccountReference: req.description.slice(0, 12),
       TransactionDesc: req.description.slice(0, 20),
     }),
   });
-  const data = (await res.json()) as {
+  const data = (await res.json().catch(() => ({}))) as {
     MerchantRequestID?: string;
     CheckoutRequestID?: string;
     ResponseCode?: string;
@@ -119,39 +123,185 @@ export async function initiateStkPush(req: StkRequest) {
     errorMessage?: string;
   };
 
-  if (data.ResponseCode !== "0") {
-    await prisma.mpesaTransaction.update({
-      where: { id: mpesaTx.id },
-      data: { status: "FAILED", resultDesc: data.errorMessage ?? "STK request rejected" },
-    });
-    throw new Error(data.errorMessage ?? "STK request failed");
+  if (data.ResponseCode !== "0" || !data.CheckoutRequestID) {
+    throw new ApiError(
+      502,
+      data.errorMessage ?? data.ResponseDescription ?? "M-Pesa rejected the payment request. Please try again.",
+    );
   }
 
-  await prisma.mpesaTransaction.update({
-    where: { id: mpesaTx.id },
+  const mpesaTx = await prisma.mpesaTransaction.create({
     data: {
-      merchantRequestId: data.MerchantRequestID,
+      reference,
+      mode: cfg.env === "production" ? "LIVE" : "SANDBOX",
+      type: "STK_PUSH",
+      purpose: req.purpose,
+      phone: req.phone,
+      amount: new Prisma.Decimal(req.amount),
+      status: "PENDING",
+      relatedType: req.relatedType,
+      relatedId: req.relatedId,
+      merchantRequestId: data.MerchantRequestID ?? null,
       checkoutRequestId: data.CheckoutRequestID,
     },
   });
 
-  return { mpesaTx, demo: false as const, checkoutRequestId: data.CheckoutRequestID! };
+  return { mpesaTx, checkoutRequestId: data.CheckoutRequestID };
 }
 
-// Simulates the Safaricom callback for demo transactions.
-export async function completeDemoStk(mpesaTransactionId: string, success: boolean) {
-  const tx = await prisma.mpesaTransaction.findUnique({ where: { id: mpesaTransactionId } });
-  if (!tx || tx.status !== "PENDING") return null;
-  const receipt = success ? `SIM${randomToken(4).toUpperCase()}` : null;
-  return prisma.mpesaTransaction.update({
-    where: { id: tx.id },
+export interface QueryResult {
+  outcome: "PENDING" | "SUCCESS" | "FAILED";
+  receipt?: string | null;
+  desc?: string;
+}
+
+interface MpesaTransactionLike {
+  type: string;
+  merchantRequestId: string | null;
+  checkoutRequestId: string | null;
+}
+
+// Query an STK push result (used by status polling so payments settle even
+// when the Safaricom callback cannot reach this server).
+export async function queryStkPushResult(tx: MpesaTransactionLike): Promise<QueryResult> {
+  const cfg = mpesaConfig();
+  if (!tx.merchantRequestId || !tx.checkoutRequestId) return { outcome: "PENDING" };
+  const timestamp = stkTimestamp();
+  const password = Buffer.from(`${cfg.shortcode}${cfg.passkey}${timestamp}`).toString("base64");
+  const token = await darajaToken(cfg);
+  const res = await fetch(`${cfg.baseUrl}/mpesa/stkpushquery/v1/query`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      BusinessShortCode: cfg.shortcode,
+      Password: password,
+      Timestamp: timestamp,
+      CheckoutRequestID: tx.checkoutRequestId,
+    }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    ResponseCode?: string;
+    ResultCode?: number | string;
+    ResultDesc?: string;
+    CallbackMetadata?: { Item?: { Name: string; Value: unknown }[] };
+  };
+  const rc = Number(data.ResultCode ?? data.ResponseCode ?? -1);
+  const desc = data.ResultDesc ?? "";
+  if (rc === 0) {
+    const receipt =
+      data.CallbackMetadata?.Item?.find((i) => i.Name === "MpesaReceiptNumber")?.Value?.toString() ?? null;
+    return { outcome: "SUCCESS", receipt, desc };
+  }
+  // 1/-1 = still processing, 1032 = awaiting PIN, 1033/1034 = pending input
+  if (rc === 1 || rc === -1 || rc === 1032 || rc === 1033 || rc === 1034) {
+    return { outcome: "PENDING", desc };
+  }
+  return { outcome: "FAILED", desc: desc || `Result code ${rc}` };
+}
+
+function b2cInitiator() {
+  return {
+    initiator: process.env.MPESA_B2C_INITIATOR ?? "",
+    password: process.env.MPESA_B2C_PASSWORD ?? "",
+  };
+}
+
+// Real B2C payout (business → customer M-Pesa). Safaricom returns an immediate
+// "accepted" response; the final result arrives via the B2C callback or is
+// resolved by queryB2CResult during status polling.
+export async function initiateB2CPayment(req: B2CRequest) {
+  const cfg = mpesaConfig();
+  const { initiator, password } = b2cInitiator();
+  if (!cfg.shortcode) {
+    throw new ApiError(503, "M-Pesa is missing the shortcode configuration needed for payouts.");
+  }
+  if (!initiator || !password) {
+    throw new ApiError(503, "M-Pesa B2C is not configured — set MPESA_B2C_INITIATOR and MPESA_B2C_PASSWORD.");
+  }
+  const securityCredential = Buffer.from(`${password}${cfg.shortcode}`).toString("base64");
+  const reference = `MPX-B2C-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 900 + 100)}`;
+
+  const token = await darajaToken(cfg);
+  const res = await fetch(`${cfg.baseUrl}/mpesa/b2c/v1/mpesabusinessshortcodes/${initiator}/balance`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      InitiatorName: initiator,
+      SecurityCredential: securityCredential,
+      CommandID: "BusinessPayment",
+      Amount: Math.round(req.amount),
+      PartyA: cfg.shortcode,
+      PartyB: Number(req.phone),
+      Remarks: req.description.slice(0, 20),
+      QueueTimeOutURL: cfg.callbackUrl,
+      Occasion: "",
+      OriginatorConversationID: reference,
+    }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    ResponseCode?: string;
+    ResponseDescription?: string;
+    MerchantRequestID?: string;
+    RequestID?: string; // Daraja returns the conversation ID as RequestID
+    errorMessage?: string;
+  };
+
+  if (data.ResponseCode !== "0") {
+    throw new ApiError(
+      502,
+      data.errorMessage ?? data.ResponseDescription ?? "M-Pesa rejected the payout request. Please try again.",
+    );
+  }
+
+  const mpesaTx = await prisma.mpesaTransaction.create({
     data: {
-      status: success ? "SUCCESS" : "FAILED",
-      resultDesc: success ? "The service request is processed successfully." : "Request cancelled by user",
-      mpesaReceipt: receipt,
-      payload: JSON.stringify({ simulated: true, demo: true }),
+      reference,
+      mode: cfg.env === "production" ? "LIVE" : "SANDBOX",
+      type: req.purpose === "LOAN_DISBURSEMENT" ? "B2C_DISBURSEMENT" : "B2C_WITHDRAWAL",
+      purpose: req.purpose,
+      phone: req.phone,
+      amount: new Prisma.Decimal(req.amount),
+      status: "PENDING",
+      relatedType: req.relatedType,
+      relatedId: req.relatedId,
+      merchantRequestId: data.MerchantRequestID ?? null,
+      checkoutRequestId: data.RequestID ?? reference,
     },
   });
+
+  return { mpesaTx, checkoutRequestId: mpesaTx.checkoutRequestId! };
+}
+
+interface B2CRequest {
+  phone: string;
+  amount: number;
+  purpose: MpesaPurpose;
+  relatedType: string;
+  relatedId: string;
+  description: string;
+}
+
+export async function queryB2CResult(tx: MpesaTransactionLike): Promise<QueryResult> {
+  const cfg = mpesaConfig();
+  const { initiator } = b2cInitiator();
+  if (!initiator || !tx.checkoutRequestId) return { outcome: "PENDING" };
+  const token = await darajaToken(cfg);
+  const url =
+    `${cfg.baseUrl}/mpesa/b2cquery/v1/${initiator}/ResultAPI` +
+    `?queryRequestUniqueId=${encodeURIComponent(tx.checkoutRequestId)}&queryRequestType=TransactionB2CId`;
+  const res = await fetch(url, { method: "GET", headers: { Authorization: `Bearer ${token}` } });
+  const data = (await res.json().catch(() => ({}))) as {
+    queryResponseCode?: string;
+    queryResultCode?: string;
+    queryResultDesc?: string;
+    queryReceiptID?: string;
+  };
+  if (data.queryResponseCode !== "0") return { outcome: "PENDING", desc: data.queryResultDesc };
+  const rc = Number(data.queryResultCode ?? -1);
+  if (rc === 0) return { outcome: "SUCCESS", receipt: data.queryReceiptID ?? null, desc: data.queryResultDesc };
+  const desc = data.queryResultDesc ?? "";
+  if (/in progress|pending|ambiguous/i.test(desc) || rc === -1) return { outcome: "PENDING", desc };
+  return { outcome: "FAILED", desc: desc || `Result code ${rc}` };
 }
 
 export async function getMpesaTxByCheckoutId(checkoutRequestId: string) {

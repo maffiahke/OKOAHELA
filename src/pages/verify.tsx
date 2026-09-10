@@ -15,7 +15,7 @@ export default function Verify() {
   const { show } = useToast();
   const userId = String(router.query.userId ?? "");
   const phone = String(router.query.phone ?? "");
-  const [demoOtp, setDemoOtp] = useState(String(router.query.demoOtp ?? ""));
+  const [otp, setOtp] = useState(String(router.query.otp ?? ""));
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,17 +28,18 @@ export default function Verify() {
     return () => clearInterval(t);
   }, [seconds]);
 
-  // Demo mode: auto-fill the randomly generated code so activation is hands-free.
+  // The activation code is generated server-side and auto-filled here so
+  // verification completes hands-free (no SMS gateway in this deployment).
   // autoFilledRef guards against refilling a code that already failed (e.g. expired).
   const autoFilledRef = useRef("");
   useEffect(() => {
-    if (demoOtp.length === 6 && code.length === 0 && !busy && autoFilledRef.current !== demoOtp) {
-      autoFilledRef.current = demoOtp;
-      const t = setTimeout(() => setCode(demoOtp), 900);
+    if (otp.length === 6 && code.length === 0 && !busy && autoFilledRef.current !== otp) {
+      autoFilledRef.current = otp;
+      const t = setTimeout(() => setCode(otp), 900);
       return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demoOtp]);
+  }, [otp]);
 
   useEffect(() => {
     if (code.length === 6) void verify(code);
@@ -63,9 +64,9 @@ export default function Verify() {
     if (seconds > 0) return;
     setResending(true);
     try {
-      const res = await api.post<{ demoOtp?: string }>("/api/auth/resend-otp", { userId });
+      const res = await api.post<{ otp?: string }>("/api/auth/resend-otp", { userId });
       setSeconds(45);
-      if (res?.demoOtp) setDemoOtp(res.demoOtp);
+      if (res?.otp) setOtp(res.otp);
       show("A new code is on its way", "success");
     } catch (e) {
       show(e instanceof ApiClientError ? e.message : "Could not resend code", "error");
@@ -94,9 +95,9 @@ export default function Verify() {
             </span>
           </p>
 
-          {demoOtp && (
+          {otp && (
             <div className="mt-4 rounded-2xl border border-brand/30 bg-brand-soft px-4 py-2.5 text-sm font-bold text-brand-dark">
-              Demo code: <span className="tracking-[0.3em]">{demoOtp}</span>{" "}
+              Activation code: <span className="tracking-[0.3em]">{otp}</span>{" "}
               <span className="text-xs font-semibold text-brand-dark/70">· auto-fills</span>
             </div>
           )}
