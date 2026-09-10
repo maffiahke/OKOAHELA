@@ -11,6 +11,7 @@ import {
   Loader2,
 } from "lucide-react";
 import Sheet from "@/components/ui/Sheet";
+import MpesaStkModal from "@/components/mpesa/MpesaStkModal";
 import { formatKES } from "@/utils/format";
 import { api } from "@/lib/client/api";
 import { useToast } from "@/components/ui/Toast";
@@ -50,6 +51,9 @@ export default function LoanDetails() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Fee STK in flight: { checkoutRequestId, applicationId, fee }
+  const [stk, setStk] = useState<{ checkoutRequestId: string; applicationId: string; fee: number } | null>(null);
+  const [paidApplicationId, setPaidApplicationId] = useState<string | null>(null);
 
   const effectivePeriod = period ?? product?.periodMonths ?? 1;
   const fee = product ? Math.round(product.amount * product.feeRate) : 0;
@@ -63,18 +67,31 @@ export default function LoanDetails() {
       const app = await api.post<{
         id: string;
         status: string;
+        fee: number;
+        checkoutRequestId: string;
       }>("/api/loans/apply", {
         productId: product.id,
         periodMonths: effectivePeriod,
         mpesaNumber: me?.phone ?? "254700000000",
       });
       setConfirmOpen(false);
-      router.push(
-        `/loans/processing?applicationId=${app.id}&amount=${product.amount}&status=${app.status}`,
-      );
+      // Charge the application fee via M-Pesa STK before the review queue.
+      setPaidApplicationId(null);
+      setStk({ checkoutRequestId: app.checkoutRequestId, applicationId: app.id, fee: app.fee });
     } catch (e) {
       show(e instanceof Error ? e.message : "Could not submit application", "error");
       setSubmitting(false);
+    }
+  };
+
+  const finishStk = (success: boolean) => {
+    const applicationId = paidApplicationId;
+    setStk(null);
+    setSubmitting(false);
+    if (success && applicationId) {
+      router.push(
+        `/loans/processing?applicationId=${applicationId}&amount=${product?.amount ?? 0}&status=PENDING`,
+      );
     }
   };
 
@@ -283,6 +300,18 @@ export default function LoanDetails() {
           </button>
         </div>
       </Sheet>
+
+      {/* Application-fee M-Pesa STK modal */}
+      <MpesaStkModal
+        open={!!stk}
+        checkoutRequestId={stk?.checkoutRequestId ?? null}
+        amount={stk?.fee ?? null}
+        phone={me?.phone}
+        label="loan application fee"
+        onDone={() => setPaidApplicationId(stk?.applicationId ?? null)}
+        onFailed={() => show("Payment was not completed. Your application was not submitted.", "error")}
+        onClose={() => finishStk(!!paidApplicationId)}
+      />
     </div>
   );
 }

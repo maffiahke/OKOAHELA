@@ -31,6 +31,7 @@ model User {
   applications   LoanApplication[]
   transactions   Transaction[]
   savingsAccount SavingsAccount?
+  withdrawals    WithdrawalRequest[]
   auditLogs      AuditLog[]
 
   @@index([role])
@@ -202,6 +203,26 @@ model SavingsTransaction {
   createdAt          DateTime       @default(now())
 
   @@index([accountId])
+}
+
+model WithdrawalRequest {
+  id                 String   @id @default(cuid())
+  reference          String   @unique
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount             Decimal
+  mpesaNumber        String
+  // PENDING (awaiting admin) | APPROVED (B2C in flight) | COMPLETED | REJECTED | FAILED
+  status             String   @default("PENDING")
+  note               String?
+  reviewedBy         String?
+  reviewedAt         DateTime?
+  mpesaTransactionId String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
 }
 
 model MpesaTransaction {

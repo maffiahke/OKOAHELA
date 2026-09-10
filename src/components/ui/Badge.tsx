@@ -8,6 +8,7 @@ const MAP: Record<string, string> = {
   SUCCESSFUL: "bg-brand-soft text-brand-dark",
   ACTIVE: "bg-brand-soft text-brand-dark",
   APPROVED: "bg-brand-soft text-brand-dark",
+  COMPLETED: "bg-brand-soft text-brand-dark",
   VERIFIED: "bg-brand-soft text-brand-dark",
   DISBURSED: "bg-brand-soft text-brand-dark",
   PAID: "bg-brand-soft text-brand-dark",

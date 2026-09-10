@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/db";
-import { quoteLoan, toMoney, STARTING_LOAN_LIMIT, AUTO_APPROVE_THRESHOLD } from "@/lib/loans/engine";
+import { quoteLoan, toMoney, STARTING_LOAN_LIMIT } from "@/lib/loans/engine";
 import { ApiError } from "@/lib/api";
 import { Prisma } from "@prisma/client";
+import { ref } from "@/lib/transactions/ledger";
 
 export interface ApplyLoanInput {
   userId: string;
@@ -43,9 +44,9 @@ export async function applyForLoan(input: ApplyLoanInput) {
     );
   }
 
-  // Rule 3: no other pending application.
+  // Rule 3: no other application in flight (including unpaid ones).
   const pendingApp = await prisma.loanApplication.findFirst({
-    where: { userId: input.userId, status: { in: ["PENDING", "UNDER_REVIEW"] } },
+    where: { userId: input.userId, status: { in: ["AWAITING_PAYMENT", "PENDING", "UNDER_REVIEW"] } },
   });
   if (pendingApp) {
     throw new ApiError(409, "You already have an application being processed.", "PENDING_APPLICATION");
@@ -66,10 +67,9 @@ export async function applyForLoan(input: ApplyLoanInput) {
       monthlyRepayment: new Prisma.Decimal(quote.monthlyRepayment),
       periodMonths: quote.periodMonths,
       mpesaNumber: input.mpesaNumber,
-      // Auto-approve small loans instantly (policy threshold; configurable).
-      status: quote.amount <= AUTO_APPROVE_THRESHOLD ? "APPROVED" : "PENDING",
-      reviewedBy: quote.amount <= AUTO_APPROVE_THRESHOLD ? "SYSTEM" : null,
-      reviewedAt: quote.amount <= AUTO_APPROVE_THRESHOLD ? new Date() : null,
+      // Applications wait for the application-fee STK to settle (settle.ts
+      // flips AWAITING_PAYMENT → PENDING), then an admin reviews them.
+      status: "AWAITING_PAYMENT",
     },
   });
 
@@ -80,9 +80,71 @@ export async function applyForLoan(input: ApplyLoanInput) {
       action: "LOAN_APPLICATION_CREATED",
       entityType: "LoanApplication",
       entityId: application.id,
-      details: JSON.stringify({ amount: quote.amount, periodMonths: quote.periodMonths, autoApproved: quote.amount <= AUTO_APPROVE_THRESHOLD }),
+      details: JSON.stringify({ amount: quote.amount, fee: quote.fee, periodMonths: quote.periodMonths }),
     },
   });
 
   return application;
+}
+
+// Remove an application whose fee STK could not be initiated.
+export async function discardUnpaidApplication(applicationId: string) {
+  await prisma.loanApplication.deleteMany({ where: { id: applicationId, status: "AWAITING_PAYMENT" } });
+}
+
+// Settlement hook: the application fee was received → the application is now
+// queued for manual admin review. Runs inside the settle claim, so duplicate
+// callbacks are a no-op.
+export async function applyLoanApplicationFee(applicationId: string, receipt: string | null) {
+  return prisma.$transaction(async (tx) => {
+    const claimed = await tx.loanApplication.updateMany({
+      where: { id: applicationId, status: "AWAITING_PAYMENT" },
+      data: { status: "PENDING" },
+    });
+    if (claimed.count !== 1) return;
+    const app = await tx.loanApplication.findUnique({ where: { id: applicationId } });
+    if (!app) return;
+
+    await tx.transaction.create({
+      data: {
+        reference: ref("TXN"),
+        userId: app.userId,
+        category: "LOANS",
+        type: "LOAN_FEE",
+        direction: "CREDIT",
+        amount: app.fee,
+        status: "SUCCESSFUL",
+        description: `Loan application fee${receipt ? ` (Receipt ${receipt})` : ""}`,
+        relatedType: "LoanApplication",
+        relatedId: app.id,
+      },
+    });
+    await tx.notification.create({
+      data: {
+        userId: app.userId,
+        title: "Application fee received",
+        body: "Your loan application has been submitted and is awaiting review.",
+        type: "LOAN",
+      },
+    });
+  });
+}
+
+// Failure hook: fee never paid → cancel the application.
+export async function failLoanApplicationFee(applicationId: string) {
+  const cancelled = await prisma.loanApplication.updateMany({
+    where: { id: applicationId, status: "AWAITING_PAYMENT" },
+    data: { status: "CANCELLED" },
+  });
+  if (cancelled.count !== 1) return;
+  const app = await prisma.loanApplication.findUnique({ where: { id: applicationId } });
+  if (!app) return;
+  await prisma.notification.create({
+    data: {
+      userId: app.userId,
+      title: "Application not submitted",
+      body: "The application fee payment did not complete, so your loan application was cancelled. You can re-apply anytime.",
+      type: "LOAN",
+    },
+  });
 }

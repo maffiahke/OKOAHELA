@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { disburseLoanForApplication, applyLoanRepayment } from "@/lib/loans/disbursement";
-import { applySavingsDeposit, applySavingsWithdrawal } from "@/lib/savings/service";
+import { applySavingsDeposit, applySavingsWithdrawal, completeWithdrawalRequest } from "@/lib/savings/service";
+import { applyLoanApplicationFee, failLoanApplicationFee } from "@/lib/loans/service";
+import { failWithdrawalRequest } from "@/lib/savings/service";
 import { toMoney } from "@/lib/loans/engine";
 import type { MpesaTransaction } from "@prisma/client";
 
@@ -24,6 +26,9 @@ async function applyEffects(tx: MpesaTransaction, receipt: string | null) {
     case "LOAN_DISBURSEMENT":
       await disburseLoanForApplication(tx.relatedId!, receipt);
       break;
+    case "LOAN_APPLICATION_FEE":
+      await applyLoanApplicationFee(tx.relatedId!, receipt);
+      break;
     case "LOAN_REPAYMENT":
       await applyLoanRepayment(tx.relatedId!, amount, receipt);
       break;
@@ -31,7 +36,12 @@ async function applyEffects(tx: MpesaTransaction, receipt: string | null) {
       await applySavingsDeposit(tx.relatedId!, amount, receipt);
       break;
     case "SAVINGS_WITHDRAWAL":
-      await applySavingsWithdrawal(tx.relatedId!, amount, receipt);
+      if (tx.relatedType === "WithdrawalRequest") {
+        await completeWithdrawalRequest(tx.relatedId!, amount, receipt);
+      } else {
+        // Legacy payouts related directly to the user id.
+        await applySavingsWithdrawal(tx.relatedId!, amount, receipt);
+      }
       break;
     default:
       throw new Error(`Unknown M-Pesa purpose: ${tx.purpose}`);
@@ -60,15 +70,29 @@ export async function settleMpesaSuccess(mpesaTxId: string, receipt: string | nu
 export async function settleMpesaFailure(mpesaTxId: string, reason: string) {
   const tx = await prisma.mpesaTransaction.findUnique({ where: { id: mpesaTxId } });
   if (!tx) return null;
-  await claimSettled(tx.id, "FAILED", null, reason);
+  const claimed = await claimSettled(tx.id, "FAILED", null, reason);
+  if (claimed && tx.relatedId) {
+    if (tx.purpose === "LOAN_APPLICATION_FEE") {
+      await failLoanApplicationFee(tx.relatedId);
+    } else if (tx.purpose === "SAVINGS_WITHDRAWAL" && tx.relatedType === "WithdrawalRequest") {
+      await failWithdrawalRequest(tx.relatedId);
+    }
+  }
   return prisma.mpesaTransaction.findUnique({ where: { id: mpesaTxId } });
 }
 
 // Resolves the owning user of an M-Pesa transaction (no userId column —
 // ownership is derived from the related entity).
 export async function resolveMpesaOwner(tx: MpesaTransaction): Promise<string | null> {
-  if (tx.purpose === "SAVINGS_DEPOSIT" || tx.purpose === "SAVINGS_WITHDRAWAL") return tx.relatedId;
-  if (tx.purpose === "LOAN_DISBURSEMENT" && tx.relatedId) {
+  if (tx.purpose === "SAVINGS_DEPOSIT") return tx.relatedId;
+  if (tx.purpose === "SAVINGS_WITHDRAWAL") {
+    if (tx.relatedType === "WithdrawalRequest" && tx.relatedId) {
+      const request = await prisma.withdrawalRequest.findUnique({ where: { id: tx.relatedId } });
+      return request?.userId ?? null;
+    }
+    return tx.relatedId;
+  }
+  if ((tx.purpose === "LOAN_DISBURSEMENT" || tx.purpose === "LOAN_APPLICATION_FEE") && tx.relatedId) {
     const app = await prisma.loanApplication.findUnique({ where: { id: tx.relatedId } });
     return app?.userId ?? null;
   }

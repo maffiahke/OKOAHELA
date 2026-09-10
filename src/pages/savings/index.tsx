@@ -8,11 +8,21 @@ import Input from "@/components/ui/Input";
 import Sheet from "@/components/ui/Sheet";
 import MpesaStkModal from "@/components/mpesa/MpesaStkModal";
 import BackButton from "@/components/ui/BackButton";
+import Badge from "@/components/ui/Badge";
+import { useToast } from "@/components/ui/Toast";
 import { api, ApiClientError } from "@/lib/client/api";
 import { formatKES, formatDateTime } from "@/utils/format";
 
 interface SavingsData {
   balance: number;
+  withdrawals: {
+    id: string;
+    reference: string;
+    amount: number;
+    mpesaNumber: string;
+    status: string;
+    createdAt: string;
+  }[];
   transactions: {
     id: string;
     type: string;
@@ -26,6 +36,7 @@ interface SavingsData {
 
 export default function Savings() {
   const { data, mutate } = useSWR<SavingsData>("/api/savings");
+  const { show } = useToast();
   const [sheet, setSheet] = useState<null | "deposit" | "withdraw">(null);
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
@@ -52,13 +63,21 @@ export default function Savings() {
     setBusy(true);
     setError(null);
     try {
-      const endpoint = sheet === "deposit" ? "/api/savings/deposit" : "/api/savings/withdraw";
-      const res = await api.post<{ checkoutRequestId: string }>(endpoint, { amount: amt });
-      setSheet(null);
-      setPayAmount(amt);
-      setFlowLabel(sheet === "deposit" ? "deposit" : "withdrawal");
-      setCheckoutRequestId(res.checkoutRequestId);
-      setStkOpen(true);
+      if (sheet === "deposit") {
+        const res = await api.post<{ checkoutRequestId: string }>("/api/savings/deposit", { amount: amt });
+        setSheet(null);
+        setPayAmount(amt);
+        setFlowLabel("deposit");
+        setCheckoutRequestId(res.checkoutRequestId);
+        setStkOpen(true);
+      } else {
+        // Withdrawals are queued for manual admin approval before payout.
+        await api.post("/api/savings/withdraw", { amount: amt });
+        setSheet(null);
+        setAmount("");
+        show("Withdrawal requested — awaiting admin approval.", "success");
+        mutate();
+      }
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not start the transaction");
     } finally {
@@ -97,6 +116,34 @@ export default function Savings() {
       </div>
 
       <div className="space-y-4 px-5 pt-5">
+        {/* Withdrawal requests awaiting admin approval */}
+        {!!data?.withdrawals.length && (
+          <div>
+            <h2 className="px-1 text-base font-extrabold text-ink">Withdrawal Requests</h2>
+            <ul className="mt-3 space-y-2.5">
+              {data.withdrawals.map((w) => (
+                <li key={w.id}>
+                  <Card className="flex items-center gap-3 !p-4">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50">
+                      <ArrowUpFromLine size={17} className="text-red-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-ink">
+                        Withdrawal to {w.mpesaNumber}
+                      </p>
+                      <p className="text-xs text-gray-400">{formatDateTime(w.createdAt)}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="text-sm font-extrabold text-red-500">−{formatKES(w.amount)}</span>
+                      <Badge status={w.status} />
+                    </div>
+                  </Card>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Encouragement card */}
         <div className="relative overflow-hidden rounded-3xl bg-brand-soft p-5">
           <svg
@@ -219,7 +266,7 @@ export default function Savings() {
           </p>
         )}
         <Button fullWidth size="lg" className="mt-4" loading={busy} onClick={startFlow}>
-          Continue to M-Pesa
+          {sheet === "withdraw" ? "Request withdrawal" : "Continue to M-Pesa"}
         </Button>
       </Sheet>
 

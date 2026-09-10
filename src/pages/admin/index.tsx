@@ -1,7 +1,7 @@
 import useSWR from "swr";
 import { useRouter } from "next/router";
 import { motion } from "framer-motion";
-import { ArrowDownLeft, ArrowUpRight, BadgeDollarSign, ClipboardList, PiggyBank, Users, Wallet, AlertTriangle } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, BadgeDollarSign, Banknote, ClipboardList, PiggyBank, Users, Wallet, AlertTriangle } from "lucide-react";
 import Card from "@/components/ui/Card";
 import BackButton from "@/components/ui/BackButton";
 import { formatKES, relativeTime } from "@/utils/format";
@@ -9,6 +9,7 @@ import { formatKES, relativeTime } from "@/utils/format";
 interface Metrics {
   customers: number;
   pendingApplications: number;
+  pendingWithdrawals: number;
   activeLoans: number;
   overdueLoans: number;
   totalDisbursed: number;
@@ -32,6 +33,7 @@ export default function AdminOverview() {
   const kpis = [
     { label: "Customers", value: data ? String(data.customers) : "—", Icon: Users, tone: "bg-blue-50 text-blue-600" },
     { label: "Pending applications", value: data ? String(data.pendingApplications) : "—", Icon: ClipboardList, tone: "bg-amber-50 text-amber-600", path: "/admin/applications" },
+    { label: "Pending withdrawals", value: data ? String(data.pendingWithdrawals) : "—", Icon: Banknote, tone: "bg-amber-50 text-amber-600", path: "/admin/withdrawals" },
     { label: "Active loans", value: data ? String(data.activeLoans) : "—", Icon: Wallet, tone: "bg-brand-soft text-brand", path: "/admin/loans" },
     { label: "Overdue loans", value: data ? String(data.overdueLoans) : "—", Icon: AlertTriangle, tone: "bg-red-50 text-red-500", path: "/admin/loans" },
   ];

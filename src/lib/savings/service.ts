@@ -116,3 +116,33 @@ export async function applySavingsWithdrawal(userId: string, amount: number, mpe
     return newBalance;
   });
 }
+
+// Settlement hook: an admin-approved WithdrawalRequest payout succeeded —
+// debit the balance and close the request. Safe against duplicate callbacks
+// (COMPLETED requests are skipped).
+export async function completeWithdrawalRequest(requestId: string, amount: number, receipt: string | null) {
+  const request = await prisma.withdrawalRequest.findUnique({ where: { id: requestId } });
+  if (!request || request.status === "COMPLETED") return;
+  await applySavingsWithdrawal(request.userId, amount, receipt);
+  await prisma.withdrawalRequest.update({ where: { id: requestId }, data: { status: "COMPLETED" } });
+}
+
+// Failure hook: the B2C payout to the customer failed — nothing was debited,
+// just close the request and tell the customer.
+export async function failWithdrawalRequest(requestId: string) {
+  const closed = await prisma.withdrawalRequest.updateMany({
+    where: { id: requestId, status: "APPROVED" },
+    data: { status: "FAILED" },
+  });
+  if (closed.count !== 1) return;
+  const request = await prisma.withdrawalRequest.findUnique({ where: { id: requestId } });
+  if (!request) return;
+  await prisma.notification.create({
+    data: {
+      userId: request.userId,
+      title: "Withdrawal could not be completed",
+      body: `Your KES ${toMoney(request.amount).toLocaleString()} withdrawal failed and your savings balance was not debited. Please try again.`,
+      type: "SAVINGS",
+    },
+  });
+}

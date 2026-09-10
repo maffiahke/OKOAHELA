@@ -11,6 +11,7 @@ import { Prisma } from "@prisma/client";
 // /api/mpesa/status. Financial effects are applied only in lib/mpesa/settle.
 
 export type MpesaPurpose =
+  | "LOAN_APPLICATION_FEE"
   | "LOAN_DISBURSEMENT"
   | "LOAN_REPAYMENT"
   | "SAVINGS_DEPOSIT"
@@ -218,11 +219,14 @@ export async function initiateB2CPayment(req: B2CRequest) {
   if (!initiator || !password) {
     throw new ApiError(503, "M-Pesa B2C is not configured — set MPESA_B2C_INITIATOR and MPESA_B2C_PASSWORD.");
   }
+  if (!cfg.callbackUrl) {
+    throw new ApiError(503, "M-Pesa payouts need MPESA_CALLBACK_URL set to a public HTTPS URL.");
+  }
   const securityCredential = Buffer.from(`${password}${cfg.shortcode}`).toString("base64");
   const reference = `MPX-B2C-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 900 + 100)}`;
 
   const token = await darajaToken(cfg);
-  const res = await fetch(`${cfg.baseUrl}/mpesa/b2c/v1/mpesabusinessshortcodes/${initiator}/balance`, {
+  const res = await fetch(`${cfg.baseUrl}/mpesa/b2c/v1/mpesab2c`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -233,7 +237,7 @@ export async function initiateB2CPayment(req: B2CRequest) {
       PartyA: cfg.shortcode,
       PartyB: Number(req.phone),
       Remarks: req.description.slice(0, 20),
-      QueueTimeOutURL: cfg.callbackUrl,
+      QueueTimeOutURL: `${cfg.callbackUrl}/api/mpesa/callback`,
       Occasion: "",
       OriginatorConversationID: reference,
     }),

@@ -58,7 +58,3 @@ export function toMoney(v: Prisma.Decimal | number | string): number {
 
 // Default starting limit for newly verified customers (configurable in prod).
 export const STARTING_LOAN_LIMIT = 10_000;
-
-// Auto-approval threshold: loans at or below this are approved
-// instantly by the system; larger ones go to admin review.
-export const AUTO_APPROVE_THRESHOLD = 20_000;
