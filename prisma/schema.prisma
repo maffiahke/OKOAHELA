@@ -1,0 +1,287 @@
+// OKOAHELA — data model
+// SQLite for dev; switch provider to "postgresql" for production.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// NOTE: SQLite does not support Prisma enums; string statuses are validated
+// with zod / TypeScript unions in src/lib (see src/types/domain.ts).
+
+model User {
+  id           String    @id @default(cuid())
+  phone        String    @unique
+  passwordHash String
+  role         String    @default("CUSTOMER") // CUSTOMER | ADMIN
+  status       String    @default("PENDING_VERIFICATION") // PENDING_VERIFICATION | ACTIVE | SUSPENDED
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  profile        CustomerProfile?
+  sessions       Session[]
+  otpCodes       OtpVerification[]
+  notifications  Notification[]
+  loans          Loan[]
+  applications   LoanApplication[]
+  transactions   Transaction[]
+  savingsAccount SavingsAccount?
+  auditLogs      AuditLog[]
+
+  @@index([role])
+  @@index([status])
+}
+
+model CustomerProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName    String
+  nationalId  String
+  dateOfBirth DateTime
+  mpesaNumber String
+  kycStatus   String   @default("UNVERIFIED") // UNVERIFIED | VERIFIED
+  loanLimit   Decimal  @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userAgent String?
+
+  @@index([userId])
+}
+
+model OtpVerification {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone      String
+  codeHash   String
+  purpose    String // REGISTRATION | PASSWORD_RESET
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+}
+
+model LoanProduct {
+  id            String   @id @default(cuid())
+  name          String
+  amount        Decimal
+  feeRate       Decimal  @default(0.1)
+  periodMonths  Int
+  periodOptions String   @default("1,2,3,4,6")
+  description   String?
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  loans        Loan[]
+  applications LoanApplication[]
+}
+
+model LoanApplication {
+  id               String      @id @default(cuid())
+  reference        String      @unique
+  userId           String
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId        String
+  product          LoanProduct @relation(fields: [productId], references: [id])
+  amount           Decimal
+  fee              Decimal
+  totalRepayment   Decimal
+  monthlyRepayment Decimal
+  periodMonths     Int
+  mpesaNumber      String
+  status           String      @default("PENDING") // PENDING | UNDER_REVIEW | APPROVED | REJECTED | CANCELLED | DISBURSED
+  decisionNote     String?
+  reviewedBy       String?
+  reviewedAt       DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  loan Loan?
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Loan {
+  id               String           @id @default(cuid())
+  reference        String           @unique
+  applicationId    String?          @unique
+  application      LoanApplication? @relation(fields: [applicationId], references: [id])
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId        String
+  product          LoanProduct      @relation(fields: [productId], references: [id])
+  principal        Decimal
+  fee              Decimal
+  totalRepayment   Decimal
+  amountPaid       Decimal          @default(0)
+  monthlyRepayment Decimal
+  periodMonths     Int
+  mpesaNumber      String
+  status           String           @default("ACTIVE") // ACTIVE | FULLY_REPAID | OVERDUE | DEFAULTED
+  disbursedAt      DateTime
+  dueDate          DateTime
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  schedule     RepaymentScheduleItem[]
+  repayments   Repayment[]
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model RepaymentScheduleItem {
+  id          String    @id @default(cuid())
+  loanId      String
+  loan        Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  installment Int
+  amount      Decimal
+  dueDate     DateTime
+  status      String    @default("PENDING") // PENDING | PAID | OVERDUE
+  paidAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([loanId])
+}
+
+model Repayment {
+  id                 String   @id @default(cuid())
+  reference          String   @unique
+  loanId             String
+  loan               Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  amount             Decimal
+  method             String   @default("MPESA")
+  mpesaTransactionId String?
+  createdAt          DateTime @default(now())
+
+  @@index([loanId])
+}
+
+model SavingsAccount {
+  id           String               @id @default(cuid())
+  userId       String               @unique
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance      Decimal              @default(0)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  transactions SavingsTransaction[]
+
+  @@index([userId])
+}
+
+model SavingsTransaction {
+  id                 String         @id @default(cuid())
+  reference          String         @unique
+  accountId          String
+  account            SavingsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  type               String // DEPOSIT | WITHDRAWAL
+  amount             Decimal
+  balanceAfter       Decimal
+  status             String         @default("SUCCESSFUL") // PENDING | SUCCESSFUL | FAILED
+  description        String?
+  mpesaTransactionId String?
+  createdAt          DateTime       @default(now())
+
+  @@index([accountId])
+}
+
+model MpesaTransaction {
+  id                String   @id @default(cuid())
+  reference         String   @unique
+  mode              String   @default("DEMO") // DEMO | LIVE
+  type              String // STK_PUSH | B2C_DISBURSEMENT | B2C_WITHDRAWAL
+  purpose           String // LOAN_DISBURSEMENT | LOAN_REPAYMENT | SAVINGS_DEPOSIT | SAVINGS_WITHDRAWAL
+  phone             String
+  amount            Decimal
+  status            String   @default("PENDING") // PENDING | SUCCESS | FAILED | TIMEOUT | CANCELLED
+  merchantRequestId String?
+  checkoutRequestId String?  @unique
+  resultDesc        String?
+  mpesaReceipt      String?
+  relatedType       String?
+  relatedId         String?
+  payload           String?
+  simulated         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([status])
+  @@index([relatedType, relatedId])
+}
+
+model Transaction {
+  id                 String   @id @default(cuid())
+  reference          String   @unique
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category           String // LOANS | REPAYMENTS | SAVINGS | MPESA
+  type               String // LOAN_DISBURSEMENT | LOAN_FEE | LOAN_REPAYMENT | SAVINGS_DEPOSIT | SAVINGS_WITHDRAWAL
+  direction          String // CREDIT | DEBIT
+  amount             Decimal
+  status             String   @default("SUCCESSFUL") // PENDING | SUCCESSFUL | FAILED | REVERSED
+  description        String
+  relatedType        String?
+  relatedId          String?
+  mpesaTransactionId String?
+  createdAt          DateTime @default(now())
+  loan               Loan?    @relation(fields: [loanId], references: [id])
+  loanId             String?
+
+  @@index([userId, createdAt])
+  @@index([category])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  type      String   @default("GENERAL") // GENERAL | LOAN | SAVINGS | PAYMENT | SECURITY
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorRole  String? // CUSTOMER | ADMIN | SYSTEM
+  action     String
+  entityType String?
+  entityId   String?
+  details    String?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+  userId     String?
+
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([actorId])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
