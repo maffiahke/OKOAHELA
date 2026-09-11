@@ -10,6 +10,7 @@ import OtpInput from "@/components/ui/OtpInput";
 import { useToast } from "@/components/ui/Toast";
 import { api, ApiClientError } from "@/lib/client/api";
 import { formatPhoneDisplay } from "@/lib/validation/schemas";
+import Seo from "@/components/Seo";
 
 export default function Verify() {
   const router = useRouter();
@@ -78,6 +79,11 @@ export default function Verify() {
 
   return (
     <main className="flex min-h-screen flex-col bg-surface">
+      <Seo
+        title="Verify your phone"
+        description="Confirm your phone number to activate your OKOAHELA account."
+        path="/verify"
+      />
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-5 pb-10">
         <div className="flex items-center gap-3 py-4">
           <BackButton fallback="/register" />

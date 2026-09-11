@@ -11,6 +11,7 @@ import OtpInput from "@/components/ui/OtpInput";
 import { useToast } from "@/components/ui/Toast";
 import { api, ApiClientError } from "@/lib/client/api";
 import { phoneSchema, passwordSchema } from "@/lib/validation/schemas";
+import Seo from "@/components/Seo";
 
 export default function ForgotPassword() {
   const router = useRouter();
@@ -97,6 +98,11 @@ export default function ForgotPassword() {
 
   return (
     <main className="flex min-h-screen flex-col bg-surface">
+      <Seo
+        title="Reset your password"
+        description="Recover access to your OKOAHELA savings and loans account."
+        path="/forgot-password"
+      />
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-5 pb-10">
         <div className="flex items-center gap-3 py-4">
           <BackButton fallback="/login" />

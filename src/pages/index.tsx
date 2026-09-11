@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { motion } from "framer-motion";
 import Footer from "@/components/layout/Footer";
+import Seo from "@/components/Seo";
 import { Leaf, ArrowRight, Smartphone, ShieldCheck, Sparkles } from "lucide-react";
 
 const chips = [
@@ -15,6 +16,11 @@ export default function Landing() {
 
   return (
     <main className="relative flex min-h-screen flex-col overflow-hidden bg-brand-deep lg:items-center">
+      <Seo
+        title="OKOAHELA — Save with M-Pesa, borrow up to 2x your savings"
+        description="Digital savings and instant loans in Kenya. Save via M-Pesa and unlock loans from KES 250 up to double your savings. Fast approval, transparent fees."
+        path="/"
+      />
       {/* Dark green → yellow radial wash */}
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-home-radial" />
       <div aria-hidden className="pointer-events-none absolute -right-16 top-10 h-64 w-64 rounded-full bg-yellow-300/25 blur-3xl" />

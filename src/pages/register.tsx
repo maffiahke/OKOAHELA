@@ -23,6 +23,7 @@ import {
   dobSchema,
   passwordSchema,
 } from "@/lib/validation/schemas";
+import Seo from "@/components/Seo";
 
 type Errors = Partial<Record<"fullName" | "phone" | "nationalId" | "dateOfBirth" | "mpesaNumber" | "password" | "form", string>>;
 
@@ -101,6 +102,11 @@ export default function Register() {
 
   return (
     <main className="flex min-h-screen flex-col bg-surface">
+      <Seo
+        title="Create your account"
+        description="Sign up for OKOAHELA in minutes — start saving with M-Pesa and unlock loans up to 2x your savings."
+        path="/register"
+      />
       <div className="mx-auto w-full max-w-md px-5 pb-10">
         {/* Top bar */}
         <div className="flex items-center justify-between py-4">

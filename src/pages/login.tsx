@@ -9,6 +9,7 @@ import BackButton from "@/components/ui/BackButton";
 import { useToast } from "@/components/ui/Toast";
 import { api, ApiClientError } from "@/lib/client/api";
 import { phoneSchema } from "@/lib/validation/schemas";
+import Seo from "@/components/Seo";
 
 export default function Login() {
   const router = useRouter();
@@ -50,6 +51,11 @@ export default function Login() {
 
   return (
     <main className="flex min-h-screen flex-col bg-surface">
+      <Seo
+        title="Log in"
+        description="Access your OKOAHELA account — track savings, repay and apply for loans up to 2x your savings balance."
+        path="/login"
+      />
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pb-6 pt-6">
         <div className="self-start">
           <BackButton fallback="/" />
