@@ -127,7 +127,7 @@ function ProductsBody() {
     setSaving(true);
     try {
       if (editing) {
-        await api.patch(`/api/admin/products/${editing.id}`, body);
+        await api.put(`/api/admin/products/${editing.id}`, body);
         show("Product updated", "success");
       } else {
         await api.post("/api/admin/products", body);
