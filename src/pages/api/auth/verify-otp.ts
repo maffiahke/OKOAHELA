@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { hashOtp, safeEqualHex, generateOtp, createSession, sessionCookieHeader } from "@/lib/auth/session";
 import { rateLimit, withApi, ok, ApiError } from "@/lib/api";
 import { otpSchema } from "@/lib/validation/schemas";
-import { STARTING_LOAN_LIMIT } from "@/lib/loans/engine";
+import { DEFAULT_LOAN_LIMIT } from "@/lib/loans/engine";
 
 const MAX_ATTEMPTS = 5;
 
@@ -38,7 +38,7 @@ export default withApi(async (req, res) => {
     prisma.user.update({ where: { id: body.userId }, data: { status: "ACTIVE" } }),
     prisma.customerProfile.updateMany({
       where: { userId: body.userId },
-      data: { kycStatus: "VERIFIED", loanLimit: STARTING_LOAN_LIMIT },
+      data: { kycStatus: "VERIFIED", loanLimit: DEFAULT_LOAN_LIMIT },
     }),
     prisma.notification.create({
       data: {

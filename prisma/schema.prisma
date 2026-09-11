@@ -84,8 +84,12 @@ model LoanProduct {
   name          String
   amount        Decimal
   feeRate       Decimal  @default(0.1)
+  // Flat processing fee in KES — when set it replaces the percentage fee.
+  flatFee       Decimal?
   periodMonths  Int
   periodOptions String   @default("1,2,3,4,6")
+  // Savings balance a customer must hold before this product unlocks.
+  minSavings    Decimal  @default(0)
   description   String?
   badge         String?
   active        Boolean  @default(true)

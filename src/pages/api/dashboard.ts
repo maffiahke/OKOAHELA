@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "@/lib/db";
 import { withApi, ok, requireUser } from "@/lib/api";
-import { toMoney } from "@/lib/loans/engine";
+import { toMoney, computeLoanLimit } from "@/lib/loans/engine";
 
 // GET /api/dashboard — everything the customer home screen needs in one call.
 export default withApi(async (req, res) => {
@@ -32,7 +32,7 @@ export default withApi(async (req, res) => {
       phone: user.phone,
       kycStatus: profile?.kycStatus ?? "UNVERIFIED",
     },
-    loanLimit: toMoney(profile?.loanLimit ?? 0),
+    loanLimit: computeLoanLimit(toMoney(savings?.balance ?? 0)),
     savingsBalance: toMoney(savings?.balance ?? 0),
     activeLoan: activeLoan
       ? {

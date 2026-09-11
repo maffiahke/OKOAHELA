@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { withApi, ok, requireAdmin, ApiError } from "@/lib/api";
 import { logAudit } from "@/lib/transactions/ledger";
@@ -14,6 +15,8 @@ const putSchema = z.object({
     .number()
     .min(0, "Fee rate cannot be negative")
     .max(1, "Fee rate is a fraction, e.g. 0.1 for 10%"),
+  flatFee: z.number().min(0).max(100_000).optional(),
+  minSavings: z.number().min(0).max(10_000_000).optional(),
   periodMonths: z.number().int().min(1).max(60).optional(),
   periodOptions: z
     .array(z.number().int().min(1).max(60))
@@ -63,6 +66,8 @@ export default withApi(async (req, res) => {
         name: body.name,
         amount: body.amount,
         feeRate: body.feeRate,
+        flatFee: body.flatFee !== undefined && body.flatFee > 0 ? new Prisma.Decimal(body.flatFee) : null,
+        minSavings: new Prisma.Decimal(body.minSavings ?? 0),
         periodMonths: body.periodMonths ?? (options[0] ?? 1),
         periodOptions,
         description: body.description || null,

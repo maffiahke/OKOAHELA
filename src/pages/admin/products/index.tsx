@@ -27,6 +27,8 @@ interface Product {
   periodMonths: number;
   periodOptions: number[];
   badge: string | null;
+  flatFee: number;
+  minSavings: number;
   sortOrder: number;
   active: boolean;
   usage: number;
@@ -37,6 +39,8 @@ interface FormState {
   description: string;
   amount: string;
   feePercent: string;
+  flatFee: string;
+  minSavings: string;
   periods: string;
   badge: string;
   sortOrder: string;
@@ -48,6 +52,8 @@ const EMPTY_FORM: FormState = {
   description: "",
   amount: "",
   feePercent: "10",
+  flatFee: "0",
+  minSavings: "0",
   periods: "1,2,3",
   badge: "",
   sortOrder: "",
@@ -86,6 +92,8 @@ function ProductsBody() {
       description: p.description ?? "",
       amount: String(p.amount),
       feePercent: String(Math.round(p.feeRate * 10000) / 100),
+      flatFee: String(Number(p.flatFee ?? 0)),
+      minSavings: String(Number(p.minSavings ?? 0)),
       periods: p.periodOptions.join(","),
       badge: p.badge ?? "",
       sortOrder: String(p.sortOrder),
@@ -104,6 +112,8 @@ function ProductsBody() {
       description: form.description.trim(),
       amount: Number(form.amount),
       feeRate: Number(form.feePercent) / 100,
+      flatFee: Number(form.flatFee) || 0,
+      minSavings: Number(form.minSavings) || 0,
       periodOptions: parsedPeriods,
       periodMonths: parsedPeriods[0],
       badge: form.badge.trim(),
@@ -217,14 +227,24 @@ function ProductsBody() {
                     </p>
                   </div>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
                   <div className="rounded-xl bg-gray-50 py-2">
                     <p className="text-[13px] font-extrabold text-ink">{money(p.amount)}</p>
                     <p className="text-[10px] text-light">Amount</p>
                   </div>
                   <div className="rounded-xl bg-gray-50 py-2">
-                    <p className="text-[13px] font-extrabold text-ink">{Math.round(p.feeRate * 10000) / 100}%</p>
+                    <p className="text-[13px] font-extrabold text-ink">
+                      {Number(p.flatFee ?? 0) > 0
+                        ? `${money(Number(p.flatFee))} flat`
+                        : `${Math.round(p.feeRate * 10000) / 100}%`}
+                    </p>
                     <p className="text-[10px] text-light">Fee</p>
+                  </div>
+                  <div className="rounded-xl bg-gray-50 py-2">
+                    <p className="text-[13px] font-extrabold text-ink">
+                      {Number(p.minSavings ?? 0) > 0 ? money(Number(p.minSavings)) : "None"}
+                    </p>
+                    <p className="text-[10px] text-light">Min savings</p>
                   </div>
                   <div className="rounded-xl bg-gray-50 py-2">
                     <p className="text-[13px] font-extrabold text-ink">
@@ -309,6 +329,28 @@ function ProductsBody() {
               value={form.feePercent}
               onChange={(e) => field("feePercent", e.target.value)}
               suffix={<span className="text-xs font-semibold text-muted">%</span>}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              name="p-flatfee"
+              label="Flat fee"
+              type="number"
+              min={0}
+              value={form.flatFee}
+              onChange={(e) => field("flatFee", e.target.value)}
+              suffix={<span className="text-xs font-semibold text-muted">KES</span>}
+              hint="Replaces the % fee when above 0"
+            />
+            <Input
+              name="p-minsavings"
+              label="Min savings"
+              type="number"
+              min={0}
+              value={form.minSavings}
+              onChange={(e) => field("minSavings", e.target.value)}
+              suffix={<span className="text-xs font-semibold text-muted">KES</span>}
+              hint="Customers below this see it locked"
             />
           </div>
           <Input

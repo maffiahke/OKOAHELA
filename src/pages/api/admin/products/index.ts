@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { withApi, ok, requireAdmin, ApiError } from "@/lib/api";
 import { toMoney } from "@/lib/loans/engine";
@@ -8,6 +9,8 @@ const createSchema = z.object({
   name: z.string().trim().min(2, "Enter a product name").max(60),
   amount: z.number().positive("Enter a valid loan amount").max(10_000_000),
   feeRate: z.number().min(0, "Fee rate cannot be negative").max(1, "Fee rate is a fraction, e.g. 0.1 for 10%"),
+  flatFee: z.number().min(0).max(100_000).optional(),
+  minSavings: z.number().min(0).max(10_000_000).optional(),
   periodMonths: z.number().int().min(1).max(60),
   periodOptions: z
     .array(z.number().int().min(1).max(60))
@@ -37,6 +40,8 @@ export default withApi(async (req, res) => {
         name: p.name,
         amount: toMoney(p.amount),
         feeRate: toMoney(p.feeRate),
+        flatFee: toMoney(p.flatFee ?? 0),
+        minSavings: toMoney(p.minSavings),
         periodMonths: p.periodMonths,
         periodOptions: p.periodOptions.split(",").map((s) => parseInt(s, 10)).filter(Boolean),
         description: p.description,
@@ -57,6 +62,8 @@ export default withApi(async (req, res) => {
         name: body.name,
         amount: body.amount,
         feeRate: body.feeRate,
+        flatFee: body.flatFee !== undefined && body.flatFee > 0 ? new Prisma.Decimal(body.flatFee) : null,
+        minSavings: new Prisma.Decimal(body.minSavings ?? 0),
         periodMonths: body.periodMonths,
         periodOptions,
         description: body.description || null,

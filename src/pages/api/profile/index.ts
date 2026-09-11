@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { withApi, ok, requireUser, ApiError } from "@/lib/api";
 import { phoneSchema, nationalIdSchema, nameSchema, dobSchema } from "@/lib/validation/schemas";
+import { toMoney, computeLoanLimit } from "@/lib/loans/engine";
 
 // GET   /api/profile — full profile for the account screens
 // PATCH /api/profile — update personal info / M-Pesa number
@@ -10,7 +11,10 @@ export default withApi(async (req: NextApiRequest, res: NextApiResponse) => {
   const user = await requireUser(req);
 
   if (req.method === "GET") {
-    const profile = await prisma.customerProfile.findUnique({ where: { userId: user.id } });
+    const [profile, savings] = await Promise.all([
+      prisma.customerProfile.findUnique({ where: { userId: user.id } }),
+      prisma.savingsAccount.findUnique({ where: { userId: user.id } }),
+    ]);
     if (!profile) throw new ApiError(404, "Profile not found");
     return ok(res, {
       fullName: profile.fullName,
@@ -18,7 +22,7 @@ export default withApi(async (req: NextApiRequest, res: NextApiResponse) => {
       dateOfBirth: profile.dateOfBirth.toISOString().slice(0, 10),
       mpesaNumber: profile.mpesaNumber,
       kycStatus: profile.kycStatus,
-      loanLimit: Number(profile.loanLimit),
+      loanLimit: computeLoanLimit(toMoney(savings?.balance ?? 0)),
       phone: user.phone,
       role: user.role,
       memberSince: profile.createdAt.toISOString(),

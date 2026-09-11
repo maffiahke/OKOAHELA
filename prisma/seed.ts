@@ -3,7 +3,16 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-const PRODUCTS: { name: string; amount: number; periodMonths: number; description: string; badge?: string }[] = [
+const PRODUCTS: {
+  name: string;
+  amount: number;
+  periodMonths: number;
+  description: string;
+  badge?: string;
+  flatFee?: number;
+}[] = [
+  { name: "Okoa 250", amount: 250, periodMonths: 1, description: "Starter loan — no savings needed", badge: "Starter", flatFee: 70 },
+  { name: "Okoa 500", amount: 500, periodMonths: 1, description: "Quick top-up for daily needs" },
   { name: "Okoa 1K", amount: 1000, periodMonths: 1, description: "Quick top-up for daily needs", badge: "New" },
   { name: "Okoa 2K", amount: 2000, periodMonths: 1, description: "Small emergency boost", badge: "Popular" },
   { name: "Okoa 3K", amount: 3000, periodMonths: 1, description: "Cover bills till payday", badge: "Fast Track" },
@@ -64,23 +73,26 @@ async function main() {
     create: { userId: jay.id, balance: new Prisma.Decimal(4500) },
   });
 
-  // Loan products
+  // Loan products — minSavings = amount / 2 (2x savings rule), flatFee only on the 250 starter
   for (let i = 0; i < PRODUCTS.length; i++) {
     const p = PRODUCTS[i];
+    const data = {
+      name: p.name,
+      amount: new Prisma.Decimal(p.amount),
+      feeRate: new Prisma.Decimal(0.1),
+      flatFee: p.flatFee ? new Prisma.Decimal(p.flatFee) : null,
+      minSavings: new Prisma.Decimal(p.amount / 2),
+      periodMonths: p.periodMonths,
+      periodOptions: p.periodMonths === 1 ? "1" : p.periodMonths === 2 ? "1,2" : "1,2,3,4,6",
+      description: p.description,
+      badge: p.badge ?? null,
+      sortOrder: i,
+      active: true,
+    };
     await prisma.loanProduct.upsert({
       where: { id: `seed-product-${p.amount}` },
-      update: { badge: p.badge ?? null },
-      create: {
-        id: `seed-product-${p.amount}`,
-        name: p.name,
-        amount: new Prisma.Decimal(p.amount),
-        feeRate: new Prisma.Decimal(0.1),
-        periodMonths: p.periodMonths,
-        periodOptions: p.periodMonths === 1 ? "1" : p.periodMonths === 2 ? "1,2" : "1,2,3,4,6",
-        description: p.description,
-        badge: p.badge ?? null,
-        sortOrder: i,
-      },
+      update: data,
+      create: { id: `seed-product-${p.amount}`, ...data },
     });
   }
 
@@ -313,7 +325,7 @@ async function main() {
     }
   }
 
-  console.log("Seed complete: admin + demo customer Jay Venas, 10 products, demo loans, savings, notifications.");
+  console.log("Seed complete: admin + demo customer Jay Venas, 12 products, demo loans, savings, notifications.");
 }
 
 main()

@@ -9,6 +9,7 @@ import {
   ChevronRight,
   CheckCircle2,
   Loader2,
+  Lock,
 } from "lucide-react";
 import Sheet from "@/components/ui/Sheet";
 import Input from "@/components/ui/Input";
@@ -23,9 +24,19 @@ interface LoanProduct {
   name: string;
   amount: number;
   feeRate: number;
+  flatFee: number;
+  fee: number;
   periodMonths: number;
   description: string;
   badge: string | null;
+  minSavings: number;
+  locked: boolean;
+}
+
+interface LoanProductsResponse {
+  savingsBalance: number;
+  loanLimit: number;
+  products: LoanProduct[];
 }
 
 const KEY_INFO = [
@@ -97,10 +108,11 @@ export default function LoanDetails() {
   const router = useRouter();
   const { show } = useToast();
   const productId = String(router.query.productId ?? "");
-  const { data: products, error } = useSWR<LoanProduct[]>(
+  const { data: productsData, error } = useSWR<LoanProductsResponse>(
     productId ? "/api/loan-products" : null,
     api.get,
   );
+  const products = productsData?.products;
   const { data: me } = useSWR<{ id: string; phone: string; nationalId?: string | null } | null>(
     "/api/auth/me",
     api.get,
@@ -124,9 +136,12 @@ export default function LoanDetails() {
   const [paidApplicationId, setPaidApplicationId] = useState<string | null>(null);
 
   const effectivePeriod = period ?? product?.periodMonths ?? 1;
-  const fee = product ? Math.round(product.amount * product.feeRate) : 0;
+  // Flat fee (e.g. KES 70 on the starter loan) replaces the percentage fee.
+  const fee = product ? (product.flatFee > 0 ? product.flatFee : product.fee) : 0;
   const total = (product?.amount ?? 0) + fee;
   const monthly = Math.round(Math.floor((total / effectivePeriod) * 100) / 100);
+  const locked = product?.locked ?? false;
+  const unlockShortfall = product ? Math.max(0, product.minSavings - (productsData?.savingsBalance ?? 0)) : 0;
 
   const af = <K extends keyof ApplyForm>(key: K, value: ApplyForm[K]) =>
     setApplyForm((prev) => ({ ...prev, [key]: value }));
@@ -312,14 +327,44 @@ export default function LoanDetails() {
         </ul>
       </motion.div>
 
+      {/* Locked requirement notice */}
+      {locked && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-5 flex items-center gap-3 rounded-3xl border border-amber-200 bg-amber-50 p-4"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+            <Lock size={18} className="text-amber-500" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-extrabold text-amber-700">Locked — savings requirement not met</p>
+            <p className="mt-0.5 text-xs font-medium text-amber-600">
+              {unlockShortfall > 0
+                ? `Save ${formatKES(unlockShortfall)} more (needs ${formatKES(product.minSavings)} in savings) to unlock this loan.`
+                : "Your savings don't cover this loan's requirement yet."}
+            </p>
+          </div>
+        </motion.div>
+      )}
+
       <div className="flex-1" />
 
-      <button
-        onClick={openApplyForm}
-        className="mt-6 rounded-2xl bg-brand py-4 text-base font-bold text-white shadow-brand transition hover:bg-mid active:scale-[0.98]"
-      >
-        Continue
-      </button>
+      {locked ? (
+        <button
+          onClick={() => router.push("/savings")}
+          className="mt-6 rounded-2xl bg-amber-500 py-4 text-base font-bold text-white shadow-brand transition hover:bg-amber-600 active:scale-[0.98]"
+        >
+          Save to unlock
+        </button>
+      ) : (
+        <button
+          onClick={openApplyForm}
+          className="mt-6 rounded-2xl bg-brand py-4 text-base font-bold text-white shadow-brand transition hover:bg-mid active:scale-[0.98]"
+        >
+          Continue
+        </button>
+      )}
       <p className="mt-3 text-center text-[11px] leading-relaxed text-gray-400">
         By continuing, you agree to our <span className="font-semibold text-gray-500">Terms &amp; Conditions</span> and{" "}
         <span className="font-semibold text-gray-500">Privacy Policy</span>

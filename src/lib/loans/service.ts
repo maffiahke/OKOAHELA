@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { quoteLoan, toMoney, STARTING_LOAN_LIMIT } from "@/lib/loans/engine";
+import { quoteLoan, toMoney, computeLoanLimit } from "@/lib/loans/engine";
 import { ApiError } from "@/lib/api";
 import { Prisma } from "@prisma/client";
 import { ref } from "@/lib/transactions/ledger";
@@ -33,14 +33,31 @@ export async function applyForLoan(input: ApplyLoanInput) {
   const product = await prisma.loanProduct.findUnique({ where: { id: input.productId } });
   if (!product || !product.active) throw new ApiError(404, "This loan product is not available");
 
-  // Rule 1: amount must match the product exactly (products are fixed-bundle).
+  const savings = await prisma.savingsAccount.findUnique({ where: { userId: input.userId } });
+  const savingsBalance = toMoney(savings?.balance ?? 0);
+
+  // Rule 1: product requirement — visible to everyone, but locked until the
+  // customer has saved the product's minimum savings amount.
+  const minSavings = toMoney(product.minSavings);
+  if (savingsBalance < minSavings) {
+    throw new ApiError(
+      403,
+      minSavings > 0
+        ? `Save at least KES ${minSavings.toLocaleString()} to unlock this loan.`
+        : "This loan product is locked.",
+      "PRODUCT_LOCKED",
+    );
+  }
+
+  // Rule 2: amount must be within the limit awarded from savings (2× savings,
+  // floored at the KES 250 starter limit).
   const amount = toMoney(product.amount);
-  const limit = toMoney(user.profile.loanLimit) || STARTING_LOAN_LIMIT;
+  const limit = computeLoanLimit(savingsBalance);
   if (amount > limit) {
     throw new ApiError(403, `This loan exceeds your limit of KES ${limit.toLocaleString()}.`, "LIMIT_EXCEEDED");
   }
 
-  // Rule 2: no conflicting active loans (single active loan policy).
+  // Rule 3: no conflicting active loans (single active loan policy).
   const activeLoan = await prisma.loan.findFirst({
     where: { userId: input.userId, status: { in: ["ACTIVE", "OVERDUE"] } },
   });
@@ -52,7 +69,7 @@ export async function applyForLoan(input: ApplyLoanInput) {
     );
   }
 
-  // Rule 3: no other application in flight (including unpaid ones).
+  // Rule 4: no other application in flight (including unpaid ones).
   const pendingApp = await prisma.loanApplication.findFirst({
     where: { userId: input.userId, status: { in: ["AWAITING_PAYMENT", "PENDING", "UNDER_REVIEW"] } },
   });
@@ -60,7 +77,13 @@ export async function applyForLoan(input: ApplyLoanInput) {
     throw new ApiError(409, "You already have an application being processed.", "PENDING_APPLICATION");
   }
 
-  const quote = quoteLoan(amount, toMoney(product.feeRate), input.periodMonths);
+  const quote = quoteLoan(
+    amount,
+    toMoney(product.feeRate),
+    input.periodMonths,
+    new Date(),
+    toMoney(product.flatFee ?? 0),
+  );
 
   const reference = `APP-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 900 + 100)}`;
 
