@@ -2,6 +2,7 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import Footer from "@/components/layout/Footer";
 import { ShieldCheck } from "lucide-react";
 import Button from "@/components/ui/Button";
 import BackButton from "@/components/ui/BackButton";
@@ -168,6 +169,7 @@ export default function Verify() {
           </p>
         </motion.div>
       </div>
+      <Footer />
     </main>
   );
 }

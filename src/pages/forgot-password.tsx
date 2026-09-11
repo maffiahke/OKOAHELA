@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import Footer from "@/components/layout/Footer";
 import { KeyRound, Eye, EyeOff } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -186,6 +187,7 @@ export default function ForgotPassword() {
           </p>
         </motion.div>
       </div>
+      <Footer />
     </main>
   );
 }

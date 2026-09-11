@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import Footer from "@/components/layout/Footer";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -142,6 +143,7 @@ export default function Login() {
           </svg>
         </div>
       </div>
+      <Footer />
     </main>
   );
 }

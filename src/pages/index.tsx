@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { motion } from "framer-motion";
+import Footer from "@/components/layout/Footer";
 import { Leaf, ArrowRight, Smartphone, ShieldCheck, Sparkles } from "lucide-react";
 
 const chips = [
@@ -110,6 +111,7 @@ export default function Landing() {
           </div>
         </motion.div>
       </div>
+      <Footer />
     </main>
   );
 }

@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import Footer from "@/components/layout/Footer";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import {
@@ -229,6 +230,7 @@ export default function Register() {
           </p>
         </form>
       </div>
+      <Footer />
     </main>
   );
 }
