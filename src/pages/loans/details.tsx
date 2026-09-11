@@ -341,7 +341,7 @@ export default function LoanDetails() {
             <p className="text-sm font-extrabold text-amber-700">Locked — savings requirement not met</p>
             <p className="mt-0.5 text-xs font-medium text-amber-600">
               {unlockShortfall > 0
-                ? `Save ${formatKES(unlockShortfall)} more (needs ${formatKES(product.minSavings)} in savings) to unlock this loan.`
+                ? `Save ${formatKES(unlockShortfall)} to ( ${formatKES(product.minSavings)} ) to unlock this loan amount.`
                 : "Your savings don't cover this loan's requirement yet."}
             </p>
           </div>
