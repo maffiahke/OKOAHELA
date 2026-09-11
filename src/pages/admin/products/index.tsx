@@ -110,7 +110,7 @@ function ProductsBody() {
       sortOrder: form.sortOrder.trim() ? Number(form.sortOrder) : undefined,
       active: form.active,
     };
-    if (!body.name || !body.amount || !body.periods.length) {
+    if (!body.name || !body.amount || !body.periodOptions.length) {
       show("Name, amount and at least one period are required", "error");
       return;
     }
