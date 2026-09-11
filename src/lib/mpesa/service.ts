@@ -64,10 +64,15 @@ export function mpesaConfig(): DarajaConfig {
   return cfg;
 }
 
-// Buy Goods (till number) sends funds straight to the till: the till number is
-// used everywhere the paybill shortcode would be, including the
-// shortcode+passkey+timestamp password. Paybill keeps using the shortcode.
-function stkBusinessCode(cfg: DarajaConfig): string {
+// Buy Goods sends funds to the till number, but Daraja authenticates the
+// call with the REGISTERED shortcode: BusinessShortCode and the
+// shortcode+passkey+timestamp password always use the shortcode — only
+// PartyB becomes the till. Paybill uses the shortcode for both.
+function stkAuthShortCode(cfg: DarajaConfig): string {
+  return cfg.shortcode || cfg.tillNumber;
+}
+
+function stkPartyB(cfg: DarajaConfig): string {
   if (cfg.transactionType === "CustomerBuyGoodsOnline") {
     return cfg.tillNumber || cfg.shortcode;
   }
@@ -75,7 +80,7 @@ function stkBusinessCode(cfg: DarajaConfig): string {
 }
 
 function stkPassword(cfg: DarajaConfig, timestamp: string): string {
-  return Buffer.from(`${stkBusinessCode(cfg)}${cfg.passkey}${timestamp}`).toString("base64");
+  return Buffer.from(`${stkAuthShortCode(cfg)}${cfg.passkey}${timestamp}`).toString("base64");
 }
 
 // Daraja expects 2547XXXXXXXX / 2541XXXXXXXX.
@@ -115,12 +120,13 @@ function stkTimestamp(): string {
 
 export async function initiateStkPush(req: StkRequest) {
   const cfg = mpesaConfig();
-  const businessCode = stkBusinessCode(cfg);
-  if (!businessCode || !cfg.passkey) {
+  const businessCode = stkAuthShortCode(cfg);
+  const partyB = stkPartyB(cfg);
+  if (!businessCode || !cfg.passkey || (cfg.transactionType === "CustomerBuyGoodsOnline" && !cfg.tillNumber)) {
     throw new ApiError(
       503,
       cfg.transactionType === "CustomerBuyGoodsOnline"
-        ? "M-Pesa is missing the till number/passkey configuration (set MPESA_TILL_NUMBER and MPESA_PASSKEY)."
+        ? "M-Pesa Buy Goods needs MPESA_SHORTCODE (registered shortcode), MPESA_TILL_NUMBER and MPESA_PASSKEY."
         : "M-Pesa is missing the shortcode/passkey configuration.",
     );
   }
@@ -151,13 +157,14 @@ export async function initiateStkPush(req: StkRequest) {
       Amount: Math.round(req.amount),
       PartyA: phone,
       // Buy Goods routes funds to the till; Paybill to the shortcode.
-      PartyB: businessCode,
+      PartyB: partyB,
       PhoneNumber: phone,
       CallBackURL: cfg.callbackUrl,
-      // Buy Goods has no paybill account — send the till number as reference.
-      AccountReference:
-        cfg.transactionType === "CustomerBuyGoodsOnline" ? businessCode : phone.slice(-7),
-      TransactionDesc: req.description.slice(0, 20),
+      // Daraja caps AccountReference at 12 chars and TransactionDesc at 13.
+      AccountReference: (
+        cfg.transactionType === "CustomerBuyGoodsOnline" ? partyB : phone.slice(-7)
+      ).slice(0, 12),
+      TransactionDesc: req.description.slice(0, 13),
     }),
   });
   const data = (await res.json().catch(() => ({}))) as {
@@ -218,7 +225,7 @@ export async function queryStkPushResult(tx: MpesaTransactionLike): Promise<Quer
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      BusinessShortCode: stkBusinessCode(cfg),
+      BusinessShortCode: stkAuthShortCode(cfg),
       Password: password,
       Timestamp: timestamp,
       CheckoutRequestID: tx.checkoutRequestId,
