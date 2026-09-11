@@ -31,6 +31,8 @@ interface DarajaConfig {
   key: string;
   secret: string;
   shortcode: string;
+  tillNumber: string;
+  transactionType: "CustomerBuyGoodsOnline" | "CustomerPayBillOnline";
   passkey: string;
   callbackUrl: string;
   env: "production" | "sandbox";
@@ -38,12 +40,18 @@ interface DarajaConfig {
 
 export function mpesaConfig(): DarajaConfig {
   const env = process.env.MPESA_ENV === "production" ? "production" : "sandbox";
+  const transactionType =
+    (process.env.MPESA_TRANSACTION_TYPE ?? "").trim() === "CustomerBuyGoodsOnline"
+      ? "CustomerBuyGoodsOnline"
+      : "CustomerPayBillOnline";
   const cfg: DarajaConfig = {
     env,
     baseUrl: env === "production" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke",
     key: process.env.MPESA_CONSUMER_KEY ?? "",
     secret: process.env.MPESA_CONSUMER_SECRET ?? "",
     shortcode: process.env.MPESA_SHORTCODE ?? "",
+    tillNumber: process.env.MPESA_TILL_NUMBER ?? "",
+    transactionType,
     passkey: process.env.MPESA_PASSKEY ?? "",
     callbackUrl: process.env.MPESA_CALLBACK_URL ?? "",
   };
@@ -54,6 +62,27 @@ export function mpesaConfig(): DarajaConfig {
     );
   }
   return cfg;
+}
+
+// Buy Goods (till number) sends funds straight to the till: the till number is
+// used everywhere the paybill shortcode would be, including the
+// shortcode+passkey+timestamp password. Paybill keeps using the shortcode.
+function stkBusinessCode(cfg: DarajaConfig): string {
+  if (cfg.transactionType === "CustomerBuyGoodsOnline") {
+    return cfg.tillNumber || cfg.shortcode;
+  }
+  return cfg.shortcode;
+}
+
+function stkPassword(cfg: DarajaConfig, timestamp: string): string {
+  return Buffer.from(`${stkBusinessCode(cfg)}${cfg.passkey}${timestamp}`).toString("base64");
+}
+
+// Daraja expects 2547XXXXXXXX / 2541XXXXXXXX.
+function normalizeMsisdn(phone: string): string {
+  let msisdn = phone.replace(/\D/g, "");
+  if (msisdn.startsWith("07") || msisdn.startsWith("01")) msisdn = `254${msisdn.substring(1)}`;
+  return msisdn;
 }
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
@@ -84,8 +113,14 @@ function stkTimestamp(): string {
 
 export async function initiateStkPush(req: StkRequest) {
   const cfg = mpesaConfig();
-  if (!cfg.shortcode || !cfg.passkey) {
-    throw new ApiError(503, "M-Pesa is missing the shortcode/passkey configuration.");
+  const businessCode = stkBusinessCode(cfg);
+  if (!businessCode || !cfg.passkey) {
+    throw new ApiError(
+      503,
+      cfg.transactionType === "CustomerBuyGoodsOnline"
+        ? "M-Pesa is missing the till number/passkey configuration (set MPESA_TILL_NUMBER and MPESA_PASSKEY)."
+        : "M-Pesa is missing the shortcode/passkey configuration.",
+    );
   }
   if (!cfg.callbackUrl) {
     throw new ApiError(
@@ -94,25 +129,32 @@ export async function initiateStkPush(req: StkRequest) {
     );
   }
 
+  const phone = normalizeMsisdn(req.phone);
+  if (!/^254(7|1)\d{8}$/.test(phone)) {
+    throw new ApiError(400, "Invalid phone number format for M-Pesa.");
+  }
   const reference = `MPX-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 900 + 100)}`;
   const timestamp = stkTimestamp();
-  const password = Buffer.from(`${cfg.shortcode}${cfg.passkey}${timestamp}`).toString("base64");
+  const password = stkPassword(cfg, timestamp);
 
   const token = await darajaToken(cfg);
   const res = await fetch(`${cfg.baseUrl}/mpesa/stkpush/v1/processrequest`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      BusinessShortCode: cfg.shortcode,
+      BusinessShortCode: businessCode,
       Password: password,
       Timestamp: timestamp,
-      TransactionType: "CustomerPayBillOnline",
+      TransactionType: cfg.transactionType,
       Amount: Math.round(req.amount),
-      PartyA: req.phone,
-      PartyB: cfg.shortcode,
-      PhoneNumber: req.phone,
+      PartyA: phone,
+      // Buy Goods routes funds to the till; Paybill to the shortcode.
+      PartyB: businessCode,
+      PhoneNumber: phone,
       CallBackURL: cfg.callbackUrl,
-      AccountReference: req.description.slice(0, 12),
+      // Buy Goods has no paybill account — send the till number as reference.
+      AccountReference:
+        cfg.transactionType === "CustomerBuyGoodsOnline" ? businessCode : phone.slice(-7),
       TransactionDesc: req.description.slice(0, 20),
     }),
   });
@@ -168,13 +210,13 @@ export async function queryStkPushResult(tx: MpesaTransactionLike): Promise<Quer
   const cfg = mpesaConfig();
   if (!tx.merchantRequestId || !tx.checkoutRequestId) return { outcome: "PENDING" };
   const timestamp = stkTimestamp();
-  const password = Buffer.from(`${cfg.shortcode}${cfg.passkey}${timestamp}`).toString("base64");
+  const password = stkPassword(cfg, timestamp);
   const token = await darajaToken(cfg);
   const res = await fetch(`${cfg.baseUrl}/mpesa/stkpushquery/v1/query`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      BusinessShortCode: cfg.shortcode,
+      BusinessShortCode: stkBusinessCode(cfg),
       Password: password,
       Timestamp: timestamp,
       CheckoutRequestID: tx.checkoutRequestId,
@@ -224,6 +266,14 @@ export async function initiateB2CPayment(req: B2CRequest) {
   }
   const securityCredential = Buffer.from(`${password}${cfg.shortcode}`).toString("base64");
   const reference = `MPX-B2C-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 900 + 100)}`;
+  // Queue timeouts land on the same endpoint as payment results; derive it
+  // from the callback URL's origin instead of appending to the full URL.
+  let queueTimeoutUrl = cfg.callbackUrl;
+  try {
+    queueTimeoutUrl = `${new URL(cfg.callbackUrl).origin}/api/mpesa/callback`;
+  } catch {
+    /* keep configured value if it is not a valid URL */
+  }
 
   const token = await darajaToken(cfg);
   const res = await fetch(`${cfg.baseUrl}/mpesa/b2c/v1/mpesab2c`, {
@@ -237,7 +287,7 @@ export async function initiateB2CPayment(req: B2CRequest) {
       PartyA: cfg.shortcode,
       PartyB: Number(req.phone),
       Remarks: req.description.slice(0, 20),
-      QueueTimeOutURL: `${cfg.callbackUrl}/api/mpesa/callback`,
+      QueueTimeOutURL: queueTimeoutUrl,
       Occasion: "",
       OriginatorConversationID: reference,
     }),
