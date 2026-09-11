@@ -96,13 +96,20 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
+          <button
+            onClick={logout}
+            className="flex shrink-0 items-center gap-1.5 rounded-full bg-red-50 px-3.5 py-2 text-xs font-extrabold text-red-600"
+          >
+            <LogOut size={14} />
+            Log out
+          </button>
         </nav>
       </div>
 
       {/* Main content */}
-      <main className="mx-auto max-w-3xl px-5 py-5 lg:ml-64 lg:mr-auto lg:max-w-5xl lg:px-10 lg:py-8">
-        {children}
-      </main>
+      <div className="lg:pl-64">
+        <main className="mx-auto max-w-3xl px-5 py-5 lg:max-w-5xl lg:px-10 lg:py-8">{children}</main>
+      </div>
     </div>
   );
 }

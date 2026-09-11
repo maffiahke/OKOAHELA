@@ -1,6 +1,6 @@
 import type { AppProps } from "next/app";
 import { useRouter } from "next/router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { SWRConfig } from "swr";
 import { ToastProvider } from "@/components/ui/Toast";
 import BottomNav from "@/components/layout/BottomNav";
@@ -24,23 +24,36 @@ export default function App({ Component, pageProps }: AppProps) {
   const isAppRoute = ["/dashboard", "/loans", "/savings", "/transactions", "/profile", "/notifications", "/support", "/admin"].some(
     (p) => router.pathname.startsWith(p),
   );
+  const isAdminRoute = router.pathname.startsWith("/admin");
+  const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isAppRoute) {
-      // Auth gate — the API returns 401 when the session is gone.
-      fetch("/api/auth/me")
-        .then((r) => {
-          if (r.status === 401) router.replace("/login");
-        })
-        .catch(() => {});
+    if (!isAppRoute) {
+      setRole(null);
+      return;
     }
+    let cancelled = false;
+    // Auth gate — the API returns 401 when the session is gone.
+    fetch("/api/auth/me")
+      .then(async (r) => {
+        if (r.status === 401) {
+          router.replace("/login");
+          return;
+        }
+        const json = await r.json().catch(() => null);
+        if (!cancelled) setRole(json?.data?.role ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [router.pathname, isAppRoute, router]);
 
   return (
     <SWRConfig value={{ fetcher, revalidateOnFocus: false, shouldRetryOnError: false }}>
       <ToastProvider>
         <Component {...pageProps} />
-        {isAppRoute && <BottomNav />}
+        {isAppRoute && !isAdminRoute && role !== "ADMIN" && <BottomNav />}
       </ToastProvider>
     </SWRConfig>
   );
