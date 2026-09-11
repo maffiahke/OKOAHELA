@@ -28,9 +28,9 @@ export default function Login() {
     setLoading(true);
     setError(null);
     try {
-      await api.post("/api/auth/login", { phone: parsed.data, password });
+      const me = await api.post<{ role?: string }>("/api/auth/login", { phone: parsed.data, password });
       show("Welcome back!", "success");
-      router.replace("/dashboard");
+      router.replace(me.role === "ADMIN" ? "/admin" : "/dashboard");
     } catch (err) {
       if (err instanceof ApiClientError && err.code === "NOT_VERIFIED") {
         // Route them to the verification screen with what it needs.
