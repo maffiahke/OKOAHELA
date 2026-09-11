@@ -1,5 +1,6 @@
 import type { AppProps } from "next/app";
 import { useRouter } from "next/router";
+import Head from "next/head";
 import { useEffect, useRef, useState } from "react";
 import { SWRConfig } from "swr";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -88,6 +89,10 @@ export default function App({ Component, pageProps }: AppProps) {
   return (
     <SWRConfig value={{ fetcher, revalidateOnFocus: false, shouldRetryOnError: false }}>
       <ToastProvider>
+        <Head>
+          <title>OKOAHELA</title>
+          <meta name="description" content="Save with M-Pesa. Borrow up to 2x your savings." />
+        </Head>
         <Component {...pageProps} />
         {isAppRoute && !isAdminRoute && role !== "ADMIN" && <BottomNav />}
       </ToastProvider>
