@@ -1,12 +1,14 @@
 // OKOAHELA — data model
-// SQLite for dev; switch provider to "postgresql" for production.
+// PostgreSQL (Prisma Postgres / Accelerate); SQLite kept as local fallback
+// via the commented provider line below.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
+  // provider = "sqlite"  // local dev fallback (file:./dev.db)
   url      = env("DATABASE_URL")
 }
 
