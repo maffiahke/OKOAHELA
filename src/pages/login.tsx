@@ -3,7 +3,7 @@ import Footer from "@/components/layout/Footer";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Leaf, Phone, Lock, Eye, EyeOff } from "lucide-react";
+import { Leaf, Phone, Lock, Eye, EyeOff, Clock } from "lucide-react";
 import Input from "@/components/ui/Input";
 import BackButton from "@/components/ui/BackButton";
 import { useToast } from "@/components/ui/Toast";
@@ -66,6 +66,13 @@ export default function Login() {
           <h1 className="mt-6 text-2xl font-extrabold tracking-tight text-ink">Welcome Back</h1>
           <p className="mt-1 text-sm text-gray-500">Login to access your account</p>
         </motion.div>
+
+          {router.query.expired === "1" && (
+            <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] font-semibold text-amber-800">
+              <Clock size={16} className="mt-0.5 shrink-0" />
+              Your session expired due to inactivity. Please sign in again.
+            </div>
+          )}
 
         <form onSubmit={submit} className="mt-8 flex flex-col gap-4" noValidate>
           <Input

@@ -57,7 +57,7 @@ export default withApi(async (req, res) => {
   // upsert in the savings service — no createMany-with-where in Prisma.
   await prisma.savingsAccount.upsert({ where: { userId: body.userId }, update: {}, create: { userId: body.userId } });
 
-  const { token, expiresAt } = await createSession(body.userId, "registration");
-  res.setHeader("Set-Cookie", sessionCookieHeader(token, expiresAt, process.env.NODE_ENV === "production"));
+  const { token } = await createSession(body.userId, "registration");
+  res.setHeader("Set-Cookie", sessionCookieHeader(token, process.env.NODE_ENV === "production"));
   ok(res, { verified: true });
 });

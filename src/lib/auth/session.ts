@@ -3,7 +3,10 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 
 const SESSION_COOKIE = "okohela_session";
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+// Session cookie expires when the browser closes; the server enforces a
+// sliding idle window and a hard max lifetime per login.
+const SESSION_IDLE_MS = Number(process.env.SESSION_IDLE_MINUTES ?? 30) * 60_000;
+const SESSION_MAX_MS = Number(process.env.SESSION_MAX_HOURS ?? 12) * 3_600_000;
 
 export interface AuthUser {
   id: string;
@@ -49,7 +52,11 @@ export function readSessionToken(cookieHeader: string | null | undefined): strin
 
 export async function createSession(userId: string, userAgent?: string): Promise<{ token: string; expiresAt: Date }> {
   const token = randomToken();
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  const expiresAt = new Date(Date.now() + SESSION_IDLE_MS);
+  // Opportunistically prune sessions that are past their absolute lifetime.
+  await prisma.session
+    .deleteMany({ where: { createdAt: { lt: new Date(Date.now() - SESSION_MAX_MS) } } })
+    .catch(() => undefined);
   await prisma.session.create({ data: { token, userId, expiresAt, userAgent: userAgent ?? null } });
   return { token, expiresAt };
 }
@@ -58,13 +65,13 @@ export async function destroySession(token: string) {
   await prisma.session.deleteMany({ where: { token } });
 }
 
-export function sessionCookieHeader(token: string, expiresAt: Date, secure: boolean): string {
+// No Expires attribute → a browser-session cookie, cleared when the tab closes.
+export function sessionCookieHeader(token: string, secure: boolean): string {
   const flags = [
     `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
     "Path=/",
     "HttpOnly",
     "SameSite=Lax",
-    `Expires=${expiresAt.toUTCString()}`,
   ];
   if (secure) flags.push("Secure");
   return flags.join("; ");
@@ -83,7 +90,21 @@ export async function getSessionUserFromCookie(cookieHeader: string | null | und
     where: { token },
     include: { user: { include: { profile: true } } },
   });
-  if (!session || session.expiresAt < new Date()) return null;
+  if (!session) return null;
+  const now = Date.now();
+  if (session.expiresAt.getTime() < now) {
+    // Idle (or absolute) timeout hit — kill the session server-side.
+    await prisma.session.deleteMany({ where: { token } }).catch(() => undefined);
+    return null;
+  }
+  // Sliding window: extend on activity, capped at the max lifetime.
+  const hardCap = session.createdAt.getTime() + SESSION_MAX_MS;
+  const nextExpiry = Math.min(now + SESSION_IDLE_MS, hardCap);
+  if (nextExpiry > session.expiresAt.getTime() + 60_000) {
+    await prisma.session
+      .update({ where: { token }, data: { expiresAt: new Date(nextExpiry) } })
+      .catch(() => undefined);
+  }
   return {
     id: session.user.id,
     phone: session.user.phone,

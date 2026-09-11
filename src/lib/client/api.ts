@@ -9,6 +9,19 @@ export class ApiClientError extends Error {
   }
 }
 
+// A 401 UNAUTHENTICATED anywhere in the app means the session lapsed (idle
+// timeout, max lifetime or logout) — send the user back to login once.
+export function handleAuthExpiry(status: number, code?: string): void {
+  if (status !== 401 || code !== "UNAUTHENTICATED") return;
+  if (typeof window === "undefined") return;
+  const onAuthPage = ["/login", "/register", "/verify", "/forgot-password"].some((p) =>
+    window.location.pathname.startsWith(p),
+  );
+  if (onAuthPage) return;
+  window.sessionStorage.setItem("okohela_session_expired", "1");
+  window.location.assign("/login?expired=1");
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
@@ -25,6 +38,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     /* non-JSON */
   }
   if (!res.ok || json.ok === false) {
+    handleAuthExpiry(res.status, json?.error?.code);
     throw new ApiClientError(
       json?.error?.message ?? "Something went wrong",
       res.status,

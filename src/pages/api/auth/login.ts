@@ -36,13 +36,13 @@ export default withApi(async (req, res) => {
     });
   }
 
-  const { token, expiresAt } = await createSession(user.id, req.headers["user-agent"]);
+  const { token } = await createSession(user.id, req.headers["user-agent"]);
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   await prisma.auditLog.create({
     data: { actorId: user.id, actorRole: user.role, action: "LOGIN", entityType: "User", entityId: user.id },
   });
 
-  res.setHeader("Set-Cookie", sessionCookieHeader(token, expiresAt, process.env.NODE_ENV === "production"));
+  res.setHeader("Set-Cookie", sessionCookieHeader(token, process.env.NODE_ENV === "production"));
   ok(res, {
     id: user.id,
     phone: user.phone,
