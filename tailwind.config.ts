@@ -39,6 +39,8 @@ const config: Config = {
       backgroundImage: {
         "brand-gradient": "linear-gradient(314deg, #1B8B00 0%, #01FF01 74%)",
         "brand-dark": "linear-gradient(160deg, #063D00 0%, #1B8B00 90%)",
+        "home-radial":
+          "radial-gradient(125% 105% at 50% 0%, #063D00 0%, #0B4A01 35%, #1B8B00 62%, #9AA30A 82%, #FACC15 100%)",
       },
       keyframes: {
         shimmer: {

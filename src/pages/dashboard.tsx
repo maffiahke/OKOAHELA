@@ -91,60 +91,70 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-surface pb-6">
-      {/* Dark green hero */}
-      <div className="relative overflow-hidden rounded-b-[36px] bg-brand-dark px-5 pb-24 pt-8">
-        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-brand-bright/10 blur-2xl" />
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative flex items-start justify-between"
-        >
-          <div>
-            <p className="text-sm font-medium text-white/75">{greeting()},</p>
-            <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight text-white">
-              {firstName} <span className="align-middle">👋</span>
-            </h1>
-          </div>
-          <button
-            onClick={() => router.push("/notifications")}
-            className="relative flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur transition hover:bg-white/25"
-            aria-label="Notifications"
-          >
-            <Bell size={20} />
-            {data.unreadNotifications > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-bright px-1 text-[10px] font-bold text-brand-deep">
-                {data.unreadNotifications}
-              </span>
-            )}
-          </button>
-        </motion.div>
-      </div>
+    <div className="relative min-h-screen overflow-hidden bg-brand-deep pb-6">
+      {/* Dark green → yellow radial wash */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-home-radial" />
+      <div aria-hidden className="pointer-events-none absolute -right-12 -top-12 h-52 w-52 rounded-full bg-yellow-300/25 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute -left-16 top-1/3 h-56 w-56 rounded-full bg-brand-bright/10 blur-3xl" />
 
-      <div className="relative -mt-16 space-y-4 px-5">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative flex items-start justify-between px-5 pt-8"
+      >
+        <div>
+          <p className="text-sm font-medium text-brand-bright/90">{greeting()},</p>
+          <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight text-white drop-shadow-sm">
+            {firstName} <span className="align-middle">👋</span>
+          </h1>
+          <p className="mt-1 text-[11px] font-semibold text-yellow-200/80">
+            Every KES 1 saved unlocks KES 2 of credit
+          </p>
+        </div>
+        <button
+          onClick={() => router.push("/notifications")}
+          className="relative flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur transition hover:bg-white/25"
+          aria-label="Notifications"
+        >
+          <Bell size={20} />
+          {data.unreadNotifications > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-400 px-1 text-[10px] font-bold text-brand-deep shadow">
+              {data.unreadNotifications}
+            </span>
+          )}
+        </button>
+      </motion.div>
+
+      <div className="relative mt-6 space-y-4 px-5">
         {/* Available Loan card */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand via-brand-dark to-brand-deep p-5 shadow-float"
+          className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-dark via-brand-deep to-black/70 p-5 shadow-float ring-1 ring-yellow-400/25"
         >
-          <div className="absolute -right-8 -top-10 h-28 w-28 rounded-full bg-brand-bright/25 blur-2xl" />
-          <div className="absolute -left-10 bottom-0 h-24 w-24 rounded-full bg-white/10 blur-2xl" />
-          <div className="relative flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/20 backdrop-blur">
-              <HandCoins size={21} className="text-white" />
+          <div className="absolute -right-8 -top-10 h-28 w-28 rounded-full bg-yellow-400/25 blur-2xl" />
+          <div className="absolute -left-10 bottom-0 h-24 w-24 rounded-full bg-brand-bright/10 blur-2xl" />
+          <div className="relative flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 ring-1 ring-yellow-400/40 backdrop-blur">
+                <HandCoins size={21} className="text-yellow-300" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-white/70">Available Loan</p>
+                <p className="mt-0.5 text-2xl font-extrabold tracking-tight text-white">
+                  {formatKES(available)}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-semibold text-white/75">Available Loan</p>
-              <p className="mt-0.5 text-2xl font-extrabold tracking-tight text-white">
-                {formatKES(available)}
-              </p>
-            </div>
+            <span className="rounded-full bg-yellow-400/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-yellow-300 ring-1 ring-yellow-400/30">
+              Limit {formatKES(data.loanLimit)}
+            </span>
           </div>
           <button
             onClick={() => router.push("/loans")}
-            className="relative mt-4 w-full rounded-2xl bg-white py-3 text-sm font-bold text-brand-dark shadow-float transition hover:bg-brand-soft active:scale-[0.98]"
+            className="relative mt-4 w-full rounded-2xl bg-gradient-to-r from-yellow-400 to-amber-400 py-3.5 text-sm font-extrabold text-brand-deep shadow-[0_10px_28px_-8px_rgba(250,204,21,0.55)] transition hover:brightness-105 active:scale-[0.98]"
           >
             Apply Now
           </button>
@@ -159,7 +169,7 @@ export default function Dashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 + i * 0.04 }}
               onClick={t.onClick}
-              className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${t.grad} p-4 text-left shadow-card transition hover:shadow-float active:scale-[0.98]`}
+              className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${t.grad} p-4 text-left shadow-card ring-1 ring-white/20 transition hover:shadow-float active:scale-[0.98]`}
             >
               <div className="absolute -right-6 -top-8 h-20 w-20 rounded-full bg-white/20 blur-xl" />
               <div className="relative flex items-center gap-2">
@@ -180,9 +190,10 @@ export default function Dashboard() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.28 }}
           onClick={() => router.push("/loans")}
-          className="relative flex w-full items-center overflow-hidden rounded-3xl bg-gradient-to-br from-brand-dark via-brand to-brand-deep p-5 text-left shadow-brand"
+          className="relative flex w-full items-center overflow-hidden rounded-3xl bg-gradient-to-br from-brand-dark via-brand to-brand-deep p-5 text-left shadow-brand ring-1 ring-yellow-400/20"
         >
           <div className="absolute -left-8 -top-10 h-28 w-28 rounded-full bg-brand-bright/20 blur-2xl" />
+          <div className="absolute -bottom-12 right-16 h-28 w-28 rounded-full bg-yellow-400/20 blur-2xl" />
           <div className="max-w-[68%] relative">
             <p className="text-base font-extrabold text-white">Need more funds?</p>
             <p className="mt-1 text-[13px] leading-relaxed text-white/80">

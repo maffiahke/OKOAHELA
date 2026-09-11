@@ -13,7 +13,11 @@ export default function Landing() {
   const router = useRouter();
 
   return (
-    <main className="flex min-h-screen flex-col bg-brand-gradient lg:items-center">
+    <main className="relative flex min-h-screen flex-col overflow-hidden bg-brand-deep lg:items-center">
+      {/* Dark green → yellow radial wash */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-home-radial" />
+      <div aria-hidden className="pointer-events-none absolute -right-16 top-10 h-64 w-64 rounded-full bg-yellow-300/25 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute -left-20 bottom-1/4 h-64 w-64 rounded-full bg-brand-bright/10 blur-3xl" />
       <div className="relative mx-auto flex w-full max-w-md flex-1 flex-col px-6 pb-8 pt-10">
         {/* Brand */}
         <motion.div
@@ -87,7 +91,7 @@ export default function Landing() {
           </p>
           <button
             onClick={() => router.push("/register")}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand py-4 text-base font-bold text-white shadow-brand transition hover:bg-mid active:scale-[0.98]"
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-yellow-400 to-amber-400 py-4 text-base font-extrabold text-brand-deep shadow-[0_10px_28px_-8px_rgba(250,204,21,0.55)] transition hover:brightness-105 active:scale-[0.98]"
           >
             Get Started
             <ArrowRight size={18} />
