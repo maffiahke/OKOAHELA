@@ -1,4 +1,5 @@
 import useSWR from "swr";
+import AdminLayout from "@/components/layout/AdminLayout";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2, XCircle } from "lucide-react";
@@ -28,7 +29,7 @@ interface Application {
 
 const STATUS_TABS = ["PENDING", "APPROVED", "REJECTED", "ALL"];
 
-export default function AdminApplications() {
+function AdminApplicationsBody() {
   const { show } = useToast();
   const [tab, setTab] = useState("PENDING");
   const { data, mutate } = useSWR<Application[]>(`/api/admin/applications?status=${tab}`);
@@ -130,5 +131,14 @@ export default function AdminApplications() {
         </div>
       )}
     </div>
+  );
+}
+
+
+export default function AdminApplications() {
+  return (
+    <AdminLayout>
+      <AdminApplicationsBody />
+    </AdminLayout>
   );
 }

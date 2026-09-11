@@ -1,4 +1,5 @@
 import useSWR from "swr";
+import AdminLayout from "@/components/layout/AdminLayout";
 import Card from "@/components/ui/Card";
 import BackButton from "@/components/ui/BackButton";
 import { relativeTime } from "@/utils/format";
@@ -22,7 +23,7 @@ function prettyAction(action: string): string {
     .join(" ");
 }
 
-export default function AdminAudit() {
+function AdminAuditBody() {
   const { data } = useSWR<AuditLog[]>("/api/admin/audit");
 
   return (
@@ -63,5 +64,14 @@ export default function AdminAudit() {
         </Card>
       )}
     </div>
+  );
+}
+
+
+export default function AdminAudit() {
+  return (
+    <AdminLayout>
+      <AdminAuditBody />
+    </AdminLayout>
   );
 }

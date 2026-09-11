@@ -1,4 +1,5 @@
 import useSWR from "swr";
+import AdminLayout from "@/components/layout/AdminLayout";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2, XCircle } from "lucide-react";
@@ -27,7 +28,7 @@ interface Withdrawal {
 
 const STATUS_TABS = ["PENDING", "APPROVED", "PROCESSED", "ALL"];
 
-export default function AdminWithdrawals() {
+function AdminWithdrawalsBody() {
   const { show } = useToast();
   const [tab, setTab] = useState("PENDING");
   const { data, mutate } = useSWR<{ items: Withdrawal[] }>(
@@ -134,5 +135,14 @@ export default function AdminWithdrawals() {
         </div>
       )}
     </div>
+  );
+}
+
+
+export default function AdminWithdrawals() {
+  return (
+    <AdminLayout>
+      <AdminWithdrawalsBody />
+    </AdminLayout>
   );
 }

@@ -14,7 +14,7 @@ export default withApi(async (req, res) => {
     .object({ amount: z.number().positive("Enter a valid amount").max(300000, "Maximum deposit is KES 300,000") })
     .parse(req.body);
   const amount = Math.round(body.amount);
-  if (amount < 50) throw new ApiError(422, "Minimum deposit is KES 50");
+  if (amount < 2) throw new ApiError(422, "Minimum deposit is KES 2");
 
   const profile = await prisma.customerProfile.findUnique({ where: { userId: user.id } });
   const phone = profile?.mpesaNumber ?? user.phone;

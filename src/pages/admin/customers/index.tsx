@@ -1,4 +1,5 @@
 import useSWR from "swr";
+import AdminLayout from "@/components/layout/AdminLayout";
 import { useState } from "react";
 import { Search } from "lucide-react";
 import Card from "@/components/ui/Card";
@@ -20,7 +21,7 @@ interface Customer {
   createdAt: string;
 }
 
-export default function AdminCustomers() {
+function AdminCustomersBody() {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const { data } = useSWR<Customer[]>(`/api/admin/customers?q=${encodeURIComponent(query)}`);
@@ -83,5 +84,14 @@ export default function AdminCustomers() {
         {data && data.length === 0 && <p className="py-8 text-center text-sm text-gray-400">No customers match your search</p>}
       </Card>
     </div>
+  );
+}
+
+
+export default function AdminCustomers() {
+  return (
+    <AdminLayout>
+      <AdminCustomersBody />
+    </AdminLayout>
   );
 }

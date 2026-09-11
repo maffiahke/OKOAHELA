@@ -1,4 +1,5 @@
 import useSWR from "swr";
+import AdminLayout from "@/components/layout/AdminLayout";
 import { useRouter } from "next/router";
 import { motion } from "framer-motion";
 import { ArrowDownLeft, ArrowUpRight, BadgeDollarSign, Banknote, ClipboardList, PiggyBank, Users, Wallet, AlertTriangle } from "lucide-react";
@@ -26,7 +27,7 @@ interface Metrics {
   }[];
 }
 
-export default function AdminOverview() {
+function AdminOverviewBody() {
   const router = useRouter();
   const { data } = useSWR<Metrics>("/api/admin/metrics", { refreshInterval: 20000 });
 
@@ -120,5 +121,14 @@ export default function AdminOverview() {
         )}
       </Card>
     </div>
+  );
+}
+
+
+export default function AdminOverview() {
+  return (
+    <AdminLayout>
+      <AdminOverviewBody />
+    </AdminLayout>
   );
 }

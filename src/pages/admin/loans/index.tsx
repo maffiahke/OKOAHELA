@@ -1,4 +1,5 @@
 import useSWR from "swr";
+import AdminLayout from "@/components/layout/AdminLayout";
 import { useState } from "react";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
@@ -21,7 +22,7 @@ interface LoanRow {
 
 const TABS = ["ALL", "ACTIVE", "OVERDUE", "FULLY_REPAID"];
 
-export default function AdminLoans() {
+function AdminLoansBody() {
   const [tab, setTab] = useState("ALL");
   const { data } = useSWR<LoanRow[]>(`/api/admin/loans?status=${tab}`);
 
@@ -103,5 +104,14 @@ export default function AdminLoans() {
         </Card>
       )}
     </div>
+  );
+}
+
+
+export default function AdminLoans() {
+  return (
+    <AdminLayout>
+      <AdminLoansBody />
+    </AdminLayout>
   );
 }
