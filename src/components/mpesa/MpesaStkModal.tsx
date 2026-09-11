@@ -39,6 +39,12 @@ export default function MpesaStkModal({
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settledRef = useRef(false);
+  // Keep latest callbacks in refs so the polling effect never restarts (a
+  // restarting effect would re-fire onFailed and stack duplicate toasts).
+  const onDoneRef = useRef(onDone);
+  const onFailedRef = useRef(onFailed);
+  onDoneRef.current = onDone;
+  onFailedRef.current = onFailed;
 
   const payout = /disbursement|withdrawal|payout/i.test(label);
 
@@ -60,18 +66,18 @@ export default function MpesaStkModal({
         stopTimers();
         setReceipt(tx.receipt);
         setStage("success");
-        onDone();
+        onDoneRef.current();
       } else if (tx.status === "FAILED" && !settledRef.current) {
         settledRef.current = true;
         stopTimers();
         if (tx.resultDesc) setReason(tx.resultDesc);
         setStage("failed");
-        onFailed?.();
+        onFailedRef.current?.();
       }
     } catch {
       /* keep polling — transient network/server errors */
     }
-  }, [checkoutRequestId, onDone, onFailed]);
+  }, [checkoutRequestId]);
 
   useEffect(() => {
     if (!open || !checkoutRequestId) return;
@@ -91,8 +97,7 @@ export default function MpesaStkModal({
           : "We didn't get a response in time. If you already entered your PIN, the payment will confirm automatically.",
       );
       setStage("failed");
-      onFailed?.();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      onFailedRef.current?.();
     }, TIMEOUT_MS);
     return stopTimers;
   }, [open, checkoutRequestId, checkStatus]);
