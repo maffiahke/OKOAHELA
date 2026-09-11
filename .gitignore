@@ -10,3 +10,6 @@ dev.db-journal
 .DS_Store
 tsconfig.tsbuildinfo
 next-env.d.ts
+
+*.txt.cookie
+admin-cookies.txt
