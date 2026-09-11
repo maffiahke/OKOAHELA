@@ -6,7 +6,7 @@ const DISCLOSURES: { title: string; body: React.ReactNode }[] = [
     title: "Corporate Identity",
     body: (
       <>
-        <span className="font-bold text-white">Biashara Loans</span> is a registered brand operated
+        <span className="font-bold text-white">Okoahela Loans</span> is a registered brand operated
         by <span className="font-bold text-white">Biashara Loans Kenya Limited</span>, a private
         limited company incorporated under the Companies Act, 2015 of the Laws of Kenya (Company
         Registration No. PVT-L7UQ6A2).
@@ -108,7 +108,7 @@ export default function Footer() {
         </div>
 
         <p className="mt-4 text-center text-[10px] font-medium text-white/50">
-          &copy; {new Date().getFullYear()} Biashara Loans Kenya Limited. All rights reserved.
+          &copy; {new Date().getFullYear()} Okoahela Loans Kenya Limited. All rights reserved.
         </p>
       </div>
     </footer>
