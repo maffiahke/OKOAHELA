@@ -1,7 +1,17 @@
 import useSWR from "swr";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowDownToLine, ArrowUpFromLine, PiggyBank } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Clock3,
+  Eye,
+  EyeOff,
+  History,
+  Sparkles,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -45,8 +55,42 @@ export default function Savings() {
   const [stkOpen, setStkOpen] = useState(false);
   const [payAmount, setPayAmount] = useState<number | null>(null);
   const [flowLabel, setFlowLabel] = useState("savings");
+  const [hideBalance, setHideBalance] = useState(false);
 
   const balance = data?.balance ?? 0;
+
+  // Month-by-month deposit totals (last 6 months) for the mini chart.
+  const bars = useMemo(() => {
+    const now = new Date();
+    const months = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      return { key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleString("en-KE", { month: "short" }), total: 0 };
+    });
+    for (const t of data?.transactions ?? []) {
+      if (t.type !== "DEPOSIT") continue;
+      const d = new Date(t.createdAt);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      const m = months.find((x) => x.key === key);
+      if (m) m.total += t.amount;
+    }
+    const max = Math.max(...months.map((m) => m.total), 1);
+    return months.map((m) => ({ ...m, pct: Math.max(Math.round((m.total / max) * 100), 6) }));
+  }, [data]);
+
+  const stats = useMemo(() => {
+    const txs = data?.transactions ?? [];
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const savedThisMonth = txs
+      .filter((t) => t.type === "DEPOSIT" && new Date(t.createdAt) >= monthStart)
+      .reduce((s, t) => s + t.amount, 0);
+    const locked = (data?.withdrawals ?? [])
+      .filter((w) => w.status === "PENDING" || w.status === "APPROVED")
+      .reduce((s, w) => s + w.amount, 0);
+    const deposits = txs.filter((t) => t.type === "DEPOSIT").length;
+    return { savedThisMonth, locked, deposits };
+  }, [data]);
 
   const QUICK = [100, 250, 500, 1000];
 
@@ -92,19 +136,47 @@ export default function Savings() {
   };
 
   return (
-    <div className="pb-6">
+    <div className="pb-8">
       {/* Balance hero */}
-      <div className="relative overflow-hidden rounded-b-[32px] bg-brand-gradient px-6 pb-7 pt-6 text-white shadow-brand">
-        <PiggyBank size={130} className="absolute -right-6 -top-8 opacity-15" />
-        <BackButton light className="absolute left-4 top-4 z-10" />
-        <p className="text-sm font-semibold text-white/85">Current Balance</p>
-        <p className="mt-1.5 text-4xl font-extrabold tracking-tight">{formatKES(balance)}</p>
-        <div className="mt-5 flex gap-3">
+      <div className="relative overflow-hidden rounded-b-[36px] bg-brand-dark px-6 pb-8 pt-5 text-white shadow-float">
+        {/* decorative glows */}
+        <div className="pointer-events-none absolute -right-14 -top-16 h-52 w-52 rounded-full bg-brand-bright/15 blur-2xl" />
+        <div className="pointer-events-none absolute -left-16 bottom-0 h-44 w-44 rounded-full bg-brand/25 blur-2xl" />
+        <Wallet size={150} className="pointer-events-none absolute -right-7 -top-9 rotate-12 opacity-10" />
+
+        <div className="relative flex items-center justify-between">
+          <BackButton light />
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white/90 ring-1 ring-white/20">
+            <Sparkles size={12} className="text-brand-bright" /> Savings
+          </span>
+        </div>
+
+        <p className="relative mt-5 text-[13px] font-bold uppercase tracking-[0.14em] text-brand-bright">
+          Current Balance
+        </p>
+        <div className="relative mt-1 flex items-center gap-3">
+          <p className="text-[38px] font-extrabold leading-tight tracking-tight">
+            {hideBalance ? "••••••" : formatKES(balance)}
+          </p>
+          <button
+            onClick={() => setHideBalance((v) => !v)}
+            aria-label={hideBalance ? "Show balance" : "Hide balance"}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/12 text-white/85 ring-1 ring-white/20 transition hover:bg-white/20 active:scale-95"
+          >
+            {hideBalance ? <Eye size={16} /> : <EyeOff size={16} />}
+          </button>
+        </div>
+        <p className="relative mt-0.5 text-xs font-semibold text-white/65">
+          {hideBalance ? "Tap the eye to show your balance" : "Your money is safe and growing."}
+        </p>
+
+        {/* Quick action chips row */}
+        <div className="relative mt-6 flex gap-3">
           <button
             onClick={() => openSheet("deposit")}
             className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white py-3.5 text-sm font-extrabold text-brand-dark shadow-card transition hover:bg-white/90 active:scale-[0.98]"
           >
-            <ArrowDownToLine size={17} /> Deposit Money
+            <ArrowDownToLine size={17} /> Deposit
           </button>
           <button
             onClick={() => openSheet("withdraw")}
@@ -115,17 +187,70 @@ export default function Savings() {
         </div>
       </div>
 
+      {/* Stat strip — overlaps the hero edge */}
+      <div className="relative z-10 -mt-5 px-5">
+        <div className="grid grid-cols-3 divide-x divide-gray-100 rounded-3xl bg-white py-4 shadow-float">
+          <div className="px-2 text-center">
+            <p className="text-[15px] font-extrabold text-ink">{hideBalance ? "•••" : formatKES(stats.savedThisMonth)}</p>
+            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">Saved this month</p>
+          </div>
+          <div className="px-2 text-center">
+            <p className="text-[15px] font-extrabold text-ink">{stats.deposits}</p>
+            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">Deposits</p>
+          </div>
+          <div className="px-2 text-center">
+            <p className={`text-[15px] font-extrabold ${stats.locked > 0 ? "text-amber-600" : "text-ink"}`}>
+              {hideBalance ? "•••" : formatKES(stats.locked)}
+            </p>
+            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">In processing</p>
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-4 px-5 pt-5">
+        {/* 6-month saving trend */}
+        <Card>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-[15px] font-extrabold text-ink">Saving trend</h2>
+              <p className="mt-0.5 text-xs font-semibold text-gray-400">Deposits over the last 6 months</p>
+            </div>
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft">
+              <TrendingUp size={17} className="text-brand" />
+            </span>
+          </div>
+          <div className="mt-5 flex items-end justify-between gap-3">
+            {bars.map((b, i) => (
+              <div key={b.key} className="flex flex-1 flex-col items-center gap-1.5">
+                <div className="flex h-24 w-full items-end justify-center rounded-xl bg-gray-50">
+                  <motion.div
+                    initial={{ height: 0 }}
+                    animate={{ height: `${b.pct}%` }}
+                    transition={{ delay: 0.15 + i * 0.06, type: "spring", stiffness: 120, damping: 18 }}
+                    className={`w-3.5 rounded-full ${i === bars.length - 1 ? "bg-brand-gradient" : "bg-brand/25"}`}
+                  />
+                </div>
+                <p className={`text-[10px] font-bold uppercase tracking-wide ${i === bars.length - 1 ? "text-brand" : "text-gray-400"}`}>
+                  {b.label}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Card>
+
         {/* Withdrawal requests awaiting admin approval */}
         {!!data?.withdrawals.length && (
           <div>
-            <h2 className="px-1 text-base font-extrabold text-ink">Withdrawal Requests</h2>
+            <div className="flex items-center gap-2 px-1">
+              <Clock3 size={16} className="text-amber-500" />
+              <h2 className="text-base font-extrabold text-ink">Withdrawal Requests</h2>
+            </div>
             <ul className="mt-3 space-y-2.5">
               {data.withdrawals.map((w) => (
                 <li key={w.id}>
                   <Card className="flex items-center gap-3 !p-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50">
-                      <ArrowUpFromLine size={17} className="text-red-500" />
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-50">
+                      <ArrowUpFromLine size={17} className="text-amber-500" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold text-ink">
@@ -170,9 +295,12 @@ export default function Savings() {
           </p>
         </div>
 
-        {/* Recent savings */}
+        {/* Recent savings activity */}
         <div>
-          <h2 className="px-1 text-base font-extrabold text-ink">Recent Savings</h2>
+          <div className="flex items-center gap-2 px-1">
+            <History size={16} className="text-gray-400" />
+            <h2 className="text-base font-extrabold text-ink">Recent Activity</h2>
+          </div>
           {!data ? (
             <div className="mt-3 space-y-3">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -204,7 +332,12 @@ export default function Savings() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-bold text-ink">{t.description}</p>
-                        <p className="text-xs text-gray-400">{formatDateTime(t.createdAt)}</p>
+                        <p className="text-xs text-gray-400">
+                          {formatDateTime(t.createdAt)}
+                          {t.balanceAfter != null && !hideBalance && (
+                            <span className="font-semibold text-gray-500"> · Bal {formatKES(t.balanceAfter)}</span>
+                          )}
+                        </p>
                       </div>
                       <span
                         className={`text-sm font-extrabold ${credit ? "text-brand" : "text-red-500"}`}
@@ -219,9 +352,18 @@ export default function Savings() {
             </motion.ul>
           ) : (
             <Card className="mt-3">
-              <p className="py-8 text-center text-sm text-gray-400">
-                No savings activity yet — make your first deposit!
-              </p>
+              <div className="flex flex-col items-center py-8">
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-soft">
+                  <ArrowDownToLine size={22} className="text-brand" />
+                </span>
+                <p className="mt-3 text-sm font-extrabold text-ink">No savings yet</p>
+                <p className="mt-1 text-center text-xs font-semibold text-gray-400">
+                  Make your first deposit and watch your money grow.
+                </p>
+                <Button size="sm" className="mt-4" onClick={() => openSheet("deposit")}>
+                  Deposit now
+                </Button>
+              </div>
             </Card>
           )}
         </div>
@@ -253,7 +395,11 @@ export default function Savings() {
               <button
                 key={q}
                 onClick={() => setAmount(String(q))}
-                className="rounded-xl border-2 border-gray-100 py-2 text-xs font-bold text-brand hover:border-brand/30"
+                className={`rounded-xl border-2 py-2 text-xs font-bold transition ${
+                  amount === String(q)
+                    ? "border-brand bg-brand-soft text-brand-dark"
+                    : "border-gray-100 text-brand hover:border-brand/30"
+                }`}
               >
                 {q}
               </button>
