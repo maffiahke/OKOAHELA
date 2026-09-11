@@ -11,6 +11,7 @@ import {
   Loader2,
 } from "lucide-react";
 import Sheet from "@/components/ui/Sheet";
+import Input from "@/components/ui/Input";
 import MpesaStkModal from "@/components/mpesa/MpesaStkModal";
 import ProductBadge from "@/components/loans/ProductBadge";
 import { formatKES } from "@/utils/format";
@@ -33,6 +34,65 @@ const KEY_INFO = [
   "Flexible repayment options",
 ];
 
+const COUNTIES = [
+  "Baringo", "Bomet", "Bungoma", "Busia", "Elgeyo-Marakwet", "Embu", "Garissa",
+  "Homa Bay", "Isiolo", "Kajiado", "Kakamega", "Kericho", "Kiambu", "Kilifi",
+  "Kirinyaga", "Kisii", "Kisumu", "Kitui", "Kwale", "Laikipia", "Lamu", "Machakos",
+  "Makueni", "Mandera", "Marsabit", "Meru", "Migori", "Mombasa", "Murang'a",
+  "Nairobi", "Nakuru", "Nandi", "Narok", "Nyamira", "Nyandarua", "Nyeri",
+  "Samburu", "Siaya", "Taita-Taveta", "Tana River", "Tharaka-Nithi", "Trans Nzoia",
+  "Turkana", "Uasin Gishu", "Vihiga", "Wajir", "West Pokot",
+];
+
+const PURPOSES = [
+  "Business growth",
+  "Agriculture / Farming",
+  "School fees",
+  "Medical emergency",
+  "Home improvement",
+  "Transport / Vehicle",
+  "Wedding / Funeral",
+  "Emergency expenses",
+  "Other",
+];
+
+const MARITAL_STATUSES = ["Single", "Married", "Cohabiting", "Divorced", "Widowed"];
+const RELATIONSHIPS = ["Spouse", "Parent", "Sibling", "Child", "Relative", "Friend", "Neighbour"];
+
+const GENDER_MAP: Record<string, "MALE" | "FEMALE"> = { Male: "MALE", Female: "FEMALE" };
+const MARITAL_MAP: Record<string, string> = {
+  Single: "SINGLE",
+  Married: "MARRIED",
+  Cohabiting: "COHABITING",
+  Divorced: "DIVORCED",
+  Widowed: "WIDOWED",
+};
+
+interface ApplyForm {
+  idNumber: string;
+  gender: string;
+  maritalStatus: string;
+  county: string;
+  loanPurpose: string;
+  nokName: string;
+  nokPhone: string;
+  nokRelationship: string;
+}
+
+const EMPTY_APPLY_FORM: ApplyForm = {
+  idNumber: "",
+  gender: "",
+  maritalStatus: "",
+  county: "",
+  loanPurpose: "",
+  nokName: "",
+  nokPhone: "",
+  nokRelationship: "",
+};
+
+const selectCls =
+  "w-full rounded-2xl border-2 border-gray-100 bg-white px-4 py-3 text-sm font-semibold text-ink outline-none transition focus:border-brand";
+
 export default function LoanDetails() {
   const router = useRouter();
   const { show } = useToast();
@@ -41,7 +101,10 @@ export default function LoanDetails() {
     productId ? "/api/loan-products" : null,
     api.get,
   );
-  const { data: me } = useSWR<{ id: string; phone: string } | null>("/api/auth/me", api.get);
+  const { data: me } = useSWR<{ id: string; phone: string; nationalId?: string | null } | null>(
+    "/api/auth/me",
+    api.get,
+  );
 
   const product = useMemo(
     () => products?.find((p) => p.id === productId) ?? null,
@@ -50,6 +113,9 @@ export default function LoanDetails() {
 
   const [period, setPeriod] = useState<number | null>(null);
   const [periodSheet, setPeriodSheet] = useState(false);
+  const [formSheet, setFormSheet] = useState(false);
+  const [applyForm, setApplyForm] = useState<ApplyForm>(EMPTY_APPLY_FORM);
+  const [formError, setFormError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -61,6 +127,39 @@ export default function LoanDetails() {
   const fee = product ? Math.round(product.amount * product.feeRate) : 0;
   const total = (product?.amount ?? 0) + fee;
   const monthly = Math.round(Math.floor((total / effectivePeriod) * 100) / 100);
+
+  const af = <K extends keyof ApplyForm>(key: K, value: ApplyForm[K]) =>
+    setApplyForm((prev) => ({ ...prev, [key]: value }));
+
+  const openApplyForm = () => {
+    setApplyForm({ ...EMPTY_APPLY_FORM, idNumber: me?.nationalId ?? "" });
+    setFormError(null);
+    setFormSheet(true);
+  };
+
+  const validateApplyForm = (): string | null => {
+    if (!/^\d{7,8}$/.test(applyForm.idNumber)) return "Enter a valid National ID number";
+    if (!applyForm.gender) return "Select your gender";
+    if (!applyForm.maritalStatus) return "Select your marital status";
+    if (!applyForm.county) return "Select your county";
+    if (!applyForm.loanPurpose) return "Select the loan purpose";
+    if (applyForm.nokName.trim().length < 3) return "Enter next of kin full name";
+    if (!/^(?:\+?254|0)(7|1)\d{8}$/.test(applyForm.nokPhone.replace(/\s/g, "")))
+      return "Enter a valid next of kin phone number";
+    if (!applyForm.nokRelationship) return "Select next of kin relationship";
+    return null;
+  };
+
+  const submitApplyForm = () => {
+    const err = validateApplyForm();
+    if (err) {
+      setFormError(err);
+      return;
+    }
+    setFormSheet(false);
+    setAgree(false);
+    setConfirmOpen(true);
+  };
 
   const submit = async () => {
     if (!product) return;
@@ -75,6 +174,17 @@ export default function LoanDetails() {
         productId: product.id,
         periodMonths: effectivePeriod,
         mpesaNumber: me?.phone ?? "254700000000",
+        idNumber: applyForm.idNumber,
+        gender: GENDER_MAP[applyForm.gender] ?? "MALE",
+        maritalStatus: MARITAL_MAP[applyForm.maritalStatus] ?? "SINGLE",
+        county: applyForm.county,
+        loanPurpose:
+          applyForm.loanPurpose === "Other"
+            ? "Other"
+            : applyForm.loanPurpose,
+        nextOfKinName: applyForm.nokName.trim(),
+        nextOfKinPhone: applyForm.nokPhone.replace(/\s/g, ""),
+        nextOfKinRelationship: applyForm.nokRelationship,
       });
       setConfirmOpen(false);
       // Charge the application fee via M-Pesa STK before the review queue.
@@ -205,10 +315,7 @@ export default function LoanDetails() {
       <div className="flex-1" />
 
       <button
-        onClick={() => {
-          setAgree(false);
-          setConfirmOpen(true);
-        }}
+        onClick={openApplyForm}
         className="mt-6 rounded-2xl bg-brand py-4 text-base font-bold text-white shadow-brand transition hover:bg-mid active:scale-[0.98]"
       >
         Continue
@@ -217,6 +324,123 @@ export default function LoanDetails() {
         By continuing, you agree to our <span className="font-semibold text-gray-500">Terms &amp; Conditions</span> and{" "}
         <span className="font-semibold text-gray-500">Privacy Policy</span>
       </p>
+
+      {/* Loan application form sheet */}
+      <Sheet open={formSheet} onClose={() => setFormSheet(false)} title="Loan Application Form">
+        <p className="-mt-2 mb-4 text-center text-xs font-semibold text-gray-400">
+          Tell us a bit about yourself — this helps us approve your loan faster.
+        </p>
+
+        <label className="block text-xs font-bold text-gray-500">NATIONAL ID NUMBER</label>
+        <Input
+          inputMode="numeric"
+          placeholder="e.g. 12345678"
+          value={applyForm.idNumber}
+          onChange={(e) => af("idNumber", e.target.value.replace(/\D/g, "").slice(0, 8))}
+          className="mt-1.5"
+        />
+
+        <label className="mt-4 block text-xs font-bold text-gray-500">GENDER</label>
+        <div className="mt-1.5 grid grid-cols-2 gap-2">
+          {["Male", "Female"].map((g) => (
+            <button
+              key={g}
+              type="button"
+              onClick={() => af("gender", g)}
+              className={`rounded-2xl border-2 py-2.5 text-sm font-bold transition ${
+                applyForm.gender === g
+                  ? "border-brand bg-brand-soft text-brand-dark"
+                  : "border-gray-100 bg-white text-gray-500 hover:border-brand/30"
+              }`}
+            >
+              {g}
+            </button>
+          ))}
+        </div>
+
+        <label className="mt-4 block text-xs font-bold text-gray-500">MARITAL STATUS</label>
+        <select
+          value={applyForm.maritalStatus}
+          onChange={(e) => af("maritalStatus", e.target.value)}
+          className={`mt-1.5 ${selectCls}`}
+        >
+          <option value="">Select marital status</option>
+          {MARITAL_STATUSES.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+
+        <label className="mt-4 block text-xs font-bold text-gray-500">COUNTY</label>
+        <select
+          value={applyForm.county}
+          onChange={(e) => af("county", e.target.value)}
+          className={`mt-1.5 ${selectCls}`}
+        >
+          <option value="">Select county</option>
+          {COUNTIES.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+
+        <label className="mt-4 block text-xs font-bold text-gray-500">LOAN PURPOSE</label>
+        <select
+          value={applyForm.loanPurpose}
+          onChange={(e) => af("loanPurpose", e.target.value)}
+          className={`mt-1.5 ${selectCls}`}
+        >
+          <option value="">What will you use the loan for?</option>
+          {PURPOSES.map((p) => (
+            <option key={p} value={p}>{p}</option>
+          ))}
+        </select>
+
+        <p className="mt-5 text-sm font-extrabold text-ink">Next of Kin</p>
+        <label className="mt-2 block text-xs font-bold text-gray-500">FULL NAME</label>
+        <Input
+          placeholder="e.g. Jane Wanjiku"
+          value={applyForm.nokName}
+          onChange={(e) => af("nokName", e.target.value)}
+          className="mt-1.5"
+        />
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-bold text-gray-500">PHONE</label>
+            <Input
+              inputMode="tel"
+              placeholder="07XX XXX XXX"
+              value={applyForm.nokPhone}
+              onChange={(e) => af("nokPhone", e.target.value.replace(/[^\d+]/g, ""))}
+              className="mt-1.5"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-500">RELATIONSHIP</label>
+            <select
+              value={applyForm.nokRelationship}
+              onChange={(e) => af("nokRelationship", e.target.value)}
+              className={`mt-1.5 ${selectCls}`}
+            >
+              <option value="">Select</option>
+              {RELATIONSHIPS.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {formError && (
+          <p className="mt-3 rounded-2xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-500">
+            {formError}
+          </p>
+        )}
+
+        <button
+          onClick={submitApplyForm}
+          className="mt-4 w-full rounded-2xl bg-brand py-3.5 text-sm font-bold text-white shadow-brand transition hover:bg-mid active:scale-[0.98]"
+        >
+          Continue
+        </button>
+      </Sheet>
 
       {/* Repayment Period sheet (mockup #16) */}
       <Sheet open={periodSheet} onClose={() => setPeriodSheet(false)} title="Repayment Period">

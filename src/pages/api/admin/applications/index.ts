@@ -32,6 +32,18 @@ export default withApi(async (req, res) => {
       monthlyRepayment: toMoney(a.monthlyRepayment),
       periodMonths: a.periodMonths,
       mpesaNumber: a.mpesaNumber,
+      idNumber: a.idNumber,
+      gender: a.gender,
+      maritalStatus: a.maritalStatus,
+      county: a.county,
+      loanPurpose: a.loanPurpose,
+      nextOfKin: a.nextOfKinName
+        ? {
+            name: a.nextOfKinName,
+            phone: a.nextOfKinPhone,
+            relationship: a.nextOfKinRelationship,
+          }
+        : null,
       status: a.status,
       createdAt: a.createdAt,
     })),

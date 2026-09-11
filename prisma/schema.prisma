@@ -110,6 +110,15 @@ model LoanApplication {
   monthlyRepayment Decimal
   periodMonths     Int
   mpesaNumber      String
+  // Collected by the loan application form at apply time
+  idNumber              String?
+  gender                String?
+  maritalStatus         String?
+  county                String?
+  loanPurpose           String?
+  nextOfKinName         String?
+  nextOfKinPhone        String?
+  nextOfKinRelationship String?
   status           String      @default("PENDING") // PENDING | UNDER_REVIEW | APPROVED | REJECTED | CANCELLED | DISBURSED
   decisionNote     String?
   reviewedBy       String?

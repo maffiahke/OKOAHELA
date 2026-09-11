@@ -11,6 +11,7 @@ export interface AuthUser {
   role: string;
   status: string;
   fullName: string | null;
+  nationalId: string | null;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -89,6 +90,7 @@ export async function getSessionUserFromCookie(cookieHeader: string | null | und
     role: session.user.role,
     status: session.user.status,
     fullName: session.user.profile?.fullName ?? null,
+    nationalId: session.user.profile?.nationalId ?? null,
   };
 }
 

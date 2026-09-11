@@ -17,14 +17,42 @@ export default withApi(async (req: NextApiRequest, res: NextApiResponse) => {
       productId: z.string().min(1, "Select a loan product"),
       periodMonths: z.number().int().min(1).max(24),
       mpesaNumber: z.string().min(9),
+      idNumber: z.string().trim().regex(/^\d{7,8}$/, "Enter a valid National ID number"),
+      gender: z.enum(["MALE", "FEMALE"]),
+      maritalStatus: z.enum(["SINGLE", "MARRIED", "DIVORCED", "WIDOWED", "COHABITING"]),
+      county: z.string().trim().min(2, "Select your county").max(40),
+      loanPurpose: z.string().trim().min(2, "Tell us the loan purpose").max(120),
+      nextOfKinName: z.string().trim().min(3, "Enter next of kin full name").max(80),
+      nextOfKinPhone: z
+        .string()
+        .trim()
+        .regex(/^(?:\+?254|0)(7|1)\d{8}$/, "Enter a valid next of kin phone number"),
+      nextOfKinRelationship: z.string().trim().min(2).max(30),
     })
     .parse(req.body);
+
+  // Normalise next-of-kin phone to the 2547XXXXXXXX storage format.
+  const nokPhone = (() => {
+    let digits = body.nextOfKinPhone.replace(/\D/g, "");
+    if (digits.startsWith("0")) digits = `254${digits.slice(1)}`;
+    else if (digits.startsWith("254")) digits = digits;
+    else digits = `254${digits}`;
+    return digits;
+  })();
 
   const application = await applyForLoan({
     userId: user.id,
     productId: body.productId,
     periodMonths: body.periodMonths,
     mpesaNumber: body.mpesaNumber,
+    idNumber: body.idNumber,
+    gender: body.gender,
+    maritalStatus: body.maritalStatus,
+    county: body.county,
+    loanPurpose: body.loanPurpose,
+    nextOfKinName: body.nextOfKinName,
+    nextOfKinPhone: nokPhone,
+    nextOfKinRelationship: body.nextOfKinRelationship,
   });
 
   const fee = toMoney(application.fee);

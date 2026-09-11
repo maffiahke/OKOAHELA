@@ -28,7 +28,7 @@ export default function Sheet({ open, onClose, title, children, persistent = fal
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", damping: 28, stiffness: 320 }}
-            className="relative z-10 w-full max-w-md rounded-t-[28px] bg-white p-6 shadow-float sm:rounded-[28px]"
+            className="relative z-10 flex max-h-[88vh] w-full max-w-md flex-col overflow-y-auto rounded-t-[28px] bg-white p-6 shadow-float sm:rounded-[28px]"
           >
             {!persistent && (
               <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-gray-200 sm:hidden" />

@@ -9,6 +9,14 @@ export interface ApplyLoanInput {
   productId: string;
   periodMonths: number;
   mpesaNumber: string;
+  idNumber: string;
+  gender: string;
+  maritalStatus: string;
+  county: string;
+  loanPurpose: string;
+  nextOfKinName: string;
+  nextOfKinPhone: string;
+  nextOfKinRelationship: string;
 }
 
 export async function applyForLoan(input: ApplyLoanInput) {
@@ -67,6 +75,14 @@ export async function applyForLoan(input: ApplyLoanInput) {
       monthlyRepayment: new Prisma.Decimal(quote.monthlyRepayment),
       periodMonths: quote.periodMonths,
       mpesaNumber: input.mpesaNumber,
+      idNumber: input.idNumber,
+      gender: input.gender,
+      maritalStatus: input.maritalStatus,
+      county: input.county,
+      loanPurpose: input.loanPurpose,
+      nextOfKinName: input.nextOfKinName,
+      nextOfKinPhone: input.nextOfKinPhone,
+      nextOfKinRelationship: input.nextOfKinRelationship,
       // Applications wait for the application-fee STK to settle (settle.ts
       // flips AWAITING_PAYMENT → PENDING), then an admin reviews them.
       status: "AWAITING_PAYMENT",

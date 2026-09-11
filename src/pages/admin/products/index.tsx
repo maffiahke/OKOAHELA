@@ -23,13 +23,13 @@ interface Product {
   name: string;
   description: string | null;
   amount: number;
-  feePercent: number;
-  periods: number[];
+  feeRate: number;
+  periodMonths: number;
+  periodOptions: number[];
   badge: string | null;
-  interestRate: number | null;
   sortOrder: number;
   active: boolean;
-  _count?: { loans: number; applications: number };
+  usage: number;
 }
 
 interface FormState {
@@ -39,7 +39,6 @@ interface FormState {
   feePercent: string;
   periods: string;
   badge: string;
-  interestRate: string;
   sortOrder: string;
   active: boolean;
 }
@@ -48,10 +47,9 @@ const EMPTY_FORM: FormState = {
   name: "",
   description: "",
   amount: "",
-  feePercent: "",
+  feePercent: "10",
   periods: "1,2,3",
   badge: "",
-  interestRate: "",
   sortOrder: "",
   active: true,
 };
@@ -87,10 +85,9 @@ function ProductsBody() {
       name: p.name,
       description: p.description ?? "",
       amount: String(p.amount),
-      feePercent: String(p.feePercent),
-      periods: p.periods.join(","),
+      feePercent: String(Math.round(p.feeRate * 10000) / 100),
+      periods: p.periodOptions.join(","),
       badge: p.badge ?? "",
-      interestRate: p.interestRate != null ? String(p.interestRate) : "",
       sortOrder: String(p.sortOrder),
       active: p.active,
     });
@@ -106,10 +103,10 @@ function ProductsBody() {
       name: form.name.trim(),
       description: form.description.trim(),
       amount: Number(form.amount),
-      feePercent: Number(form.feePercent),
-      periods: parsedPeriods,
+      feeRate: Number(form.feePercent) / 100,
+      periodOptions: parsedPeriods,
+      periodMonths: parsedPeriods[0],
       badge: form.badge.trim(),
-      interestRate: form.interestRate.trim() ? Number(form.interestRate) : null,
       sortOrder: form.sortOrder.trim() ? Number(form.sortOrder) : undefined,
       active: form.active,
     };
@@ -201,7 +198,7 @@ function ProductsBody() {
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {products.map((p) => {
-            const usage = (p._count?.loans ?? 0) + (p._count?.applications ?? 0);
+            const usage = p.usage ?? 0;
             return (
               <Card key={p.id} className="p-5">
                 <div className="flex items-start justify-between gap-3">
@@ -226,12 +223,12 @@ function ProductsBody() {
                     <p className="text-[10px] text-light">Amount</p>
                   </div>
                   <div className="rounded-xl bg-gray-50 py-2">
-                    <p className="text-[13px] font-extrabold text-ink">{p.feePercent}%</p>
+                    <p className="text-[13px] font-extrabold text-ink">{Math.round(p.feeRate * 10000) / 100}%</p>
                     <p className="text-[10px] text-light">Fee</p>
                   </div>
                   <div className="rounded-xl bg-gray-50 py-2">
                     <p className="text-[13px] font-extrabold text-ink">
-                      {p.periods.map((d) => `${d}m`).join(" · ")}
+                      {p.periodOptions.map((d) => `${d}m`).join(" · ")}
                     </p>
                     <p className="text-[10px] text-light">Periods</p>
                   </div>
@@ -322,25 +319,14 @@ function ProductsBody() {
             onChange={(e) => field("periods", e.target.value)}
             hint="Comma-separated, e.g. 1,2,3,6"
           />
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              name="p-badge"
-              label="Label"
-              placeholder="Popular"
-              value={form.badge}
-              onChange={(e) => field("badge", e.target.value)}
-              hint="Badge on customer screen"
-            />
-            <Input
-              name="p-rate"
-              label="Interest rate"
-              type="number"
-              min={0}
-              value={form.interestRate}
-              onChange={(e) => field("interestRate", e.target.value)}
-              suffix={<span className="text-xs font-semibold text-muted">%</span>}
-            />
-          </div>
+          <Input
+            name="p-badge"
+            label="Label"
+            placeholder="Popular"
+            value={form.badge}
+            onChange={(e) => field("badge", e.target.value)}
+            hint="Badge on customer screen"
+          />
           <div className="flex items-center justify-between rounded-2xl bg-gray-50 p-4">
             <p className="text-sm font-semibold text-ink">Active (visible to customers)</p>
             <input

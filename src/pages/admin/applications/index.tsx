@@ -2,7 +2,7 @@ import useSWR from "swr";
 import AdminLayout from "@/components/layout/AdminLayout";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown, XCircle } from "lucide-react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -23,8 +23,25 @@ interface Application {
   monthlyRepayment: number;
   periodMonths: number;
   mpesaNumber: string;
+  idNumber: string | null;
+  gender: string | null;
+  maritalStatus: string | null;
+  county: string | null;
+  loanPurpose: string | null;
+  nextOfKin: { name: string | null; phone: string | null; relationship: string | null } | null;
   status: string;
   createdAt: string;
+}
+
+const pretty = (v: string | null) => (v ? v.charAt(0) + v.slice(1).toLowerCase() : "—");
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1.5">
+      <span className="text-xs font-semibold text-gray-400">{label}</span>
+      <span className="text-right text-xs font-bold text-ink">{value}</span>
+    </div>
+  );
 }
 
 const STATUS_TABS = ["PENDING", "APPROVED", "REJECTED", "ALL"];
@@ -35,6 +52,7 @@ function AdminApplicationsBody() {
   const { data, mutate } = useSWR<Application[]>(`/api/admin/applications?status=${tab}`);
 
   const [deciding, setDeciding] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const decide = async (appId: string, decision: "APPROVE" | "REJECT") => {
     setDeciding(appId);
@@ -109,6 +127,37 @@ function AdminApplicationsBody() {
                     <p className="text-sm font-extrabold text-ink">{formatKES(a.totalRepayment)}</p>
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setExpanded(expanded === a.id ? null : a.id)}
+                  className="mt-3 flex w-full items-center justify-between rounded-2xl bg-brand-softer px-4 py-2.5 text-xs font-bold text-brand-dark transition hover:bg-brand-soft"
+                >
+                  Applicant details
+                  <ChevronDown
+                    size={14}
+                    className={`transition-transform ${expanded === a.id ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {expanded === a.id && (
+                  <div className="mt-2 grid gap-x-6 rounded-2xl border border-gray-100 bg-white px-4 py-3 sm:grid-cols-2">
+                    <div>
+                      <DetailRow label="ID Number" value={a.idNumber ?? "—"} />
+                      <DetailRow label="Gender" value={pretty(a.gender)} />
+                      <DetailRow label="Marital status" value={pretty(a.maritalStatus)} />
+                      <DetailRow label="County" value={a.county ?? "—"} />
+                    </div>
+                    <div>
+                      <DetailRow label="Loan purpose" value={a.loanPurpose ?? "—"} />
+                      <DetailRow
+                        label="Next of kin"
+                        value={a.nextOfKin?.name ?? "—"}
+                      />
+                      <DetailRow label="Kin phone" value={a.nextOfKin?.phone ? fmtPhone(a.nextOfKin.phone) : "—"} />
+                      <DetailRow label="Kin relationship" value={a.nextOfKin?.relationship ?? "—"} />
+                    </div>
+                  </div>
+                )}
 
                 <div className="mt-3 flex items-center justify-between">
                   <p className="text-xs text-gray-400">{a.reference} · {new Date(a.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short" })}</p>
