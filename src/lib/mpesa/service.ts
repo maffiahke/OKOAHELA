@@ -237,15 +237,27 @@ export async function queryStkPushResult(tx: MpesaTransactionLike): Promise<Quer
     ResultDesc?: string;
     CallbackMetadata?: { Item?: { Name: string; Value: unknown }[] };
   };
-  const rc = Number(data.ResultCode ?? data.ResponseCode ?? -1);
+  const rc = Number(data.ResultCode ?? -1);
   const desc = data.ResultDesc ?? "";
-  if (rc === 0) {
+  // Success requires an explicit ResultCode 0 from the query itself — a body
+  // carrying only ResponseCode "0" just means the query was delivered.
+  if (data.ResultCode !== undefined && rc === 0) {
     const receipt =
       data.CallbackMetadata?.Item?.find((i) => i.Name === "MpesaReceiptNumber")?.Value?.toString() ?? null;
     return { outcome: "SUCCESS", receipt, desc };
   }
-  // 1/-1 = still processing, 1032 = awaiting PIN, 1033/1034 = pending input
-  if (rc === 1 || rc === -1 || rc === 1032 || rc === 1033 || rc === 1034) {
+  // While the PIN prompt is still open on the customer's phone Daraja answers
+  // 1/1033 ("processing") or a transient "request not found" code such as
+  // 53001010151 when queried seconds after initiation. Treat only definitively
+  // negative responses as FAILED — otherwise keep PENDING and let the callback,
+  // a later poll, or the client's 5-minute timeout settle the outcome.
+  const definitiveFailure =
+    rc === 1032 || // PIN entry timed out or customer cancelled
+    rc === 1035 || // insufficient balance
+    /cancel|timed\s*out|exceeded|declin|insufficient|wrong identification|pin error|maximum/.test(
+      desc.toLowerCase(),
+    );
+  if (!definitiveFailure) {
     return { outcome: "PENDING", desc };
   }
   return { outcome: "FAILED", desc: desc || `Result code ${rc}` };
