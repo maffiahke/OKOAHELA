@@ -46,7 +46,7 @@ function AdminWithdrawalsBody() {
       await api.post(`/api/admin/withdrawals/${id}/decision`, { decision, note });
       show(
         decision === "APPROVE"
-          ? "Withdrawal approved — payout sent to M-Pesa"
+          ? "Withdrawal approved — balance debited and payout marked paid"
           : "Withdrawal rejected",
         "success",
       );
@@ -65,7 +65,8 @@ function AdminWithdrawalsBody() {
         <h1 className="text-2xl font-extrabold tracking-tight text-ink">Withdrawal Requests</h1>
       </div>
       <p className="-mt-2 text-sm text-gray-400">
-        Approve to send the M-Pesa payout, or reject. Balances are only debited when a payout settles.
+        Send the money to the customer&apos;s M-Pesa first, then approve — approving debits their savings
+        balance and marks the payout as paid instantly.
       </p>
 
       {/* Tabs */}

@@ -5,8 +5,9 @@ import { ref } from "@/lib/transactions/ledger";
 
 // ── Savings engine ──────────────────────────────────────────────────────────
 // Deposit: applied after M-Pesa STK success callback.
-// Withdrawal: applied after B2C payout success callback. Both are idempotent
-// per M-Pesa transaction reference and run in DB transactions.
+// Withdrawal: applied when the payout settles (B2C callback) or immediately on
+// admin approval (manual settlement — withdrawals do not depend on B2C).
+// Both are idempotent per M-Pesa transaction reference and run in DB transactions.
 
 export async function applySavingsDeposit(userId: string, amount: number, mpesaReceipt: string | null) {
   return prisma.$transaction(async (tx) => {
@@ -125,6 +126,25 @@ export async function completeWithdrawalRequest(requestId: string, amount: numbe
   if (!request || request.status === "COMPLETED") return;
   await applySavingsWithdrawal(request.userId, amount, receipt);
   await prisma.withdrawalRequest.update({ where: { id: requestId }, data: { status: "COMPLETED" } });
+}
+
+// Manual settlement: withdrawals no longer depend on the Daraja B2C payout API.
+// When an admin approves, the funds are settled out-of-band, so we debit the
+// savings balance and close the request immediately. Idempotent — a COMPLETED
+// request is a no-op.
+export async function settleWithdrawalManually(
+  requestId: string,
+  adminId: string,
+  amount: number,
+  note: string | null,
+) {
+  const request = await prisma.withdrawalRequest.findUnique({ where: { id: requestId } });
+  if (!request || request.status === "COMPLETED") return;
+  await applySavingsWithdrawal(request.userId, amount, null);
+  await prisma.withdrawalRequest.update({
+    where: { id: requestId },
+    data: { status: "COMPLETED", note, reviewedBy: adminId, reviewedAt: new Date() },
+  });
 }
 
 // Failure hook: the B2C payout to the customer failed — nothing was debited,
