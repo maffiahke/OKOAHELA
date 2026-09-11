@@ -1,9 +1,17 @@
 import { useRouter } from "next/router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, MessageCircle, Phone, ShieldQuestion, Mail } from "lucide-react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import BackButton from "@/components/ui/BackButton";
+import { api } from "@/lib/client/api";
+
+interface SupportInfo {
+  supportPhone: string;
+  supportWhatsapp: string;
+  supportEmail: string;
+  supportHours: string;
+}
 
 const FAQS = [
   {
@@ -32,9 +40,24 @@ const FAQS = [
   },
 ];
 
+const FALLBACK: SupportInfo = {
+  supportPhone: "+254700123456",
+  supportWhatsapp: "254700123456",
+  supportEmail: "support@okohela.co.ke",
+  supportHours: "Mon–Sat, 8am–7pm EAT",
+};
+
 export default function Support() {
   const router = useRouter();
   const [open, setOpen] = useState<number | null>(0);
+  const [info, setInfo] = useState<SupportInfo>(FALLBACK);
+
+  useEffect(() => {
+    api
+      .get<SupportInfo>("/api/settings")
+      .then((s) => setInfo({ ...FALLBACK, ...s }))
+      .catch(() => undefined);
+  }, []);
 
   return (
     <div className="space-y-4 pb-6">
@@ -47,12 +70,12 @@ export default function Support() {
       <div className="rounded-[28px] bg-brand-gradient p-6 text-white shadow-brand">
         <ShieldQuestion size={28} />
         <h2 className="mt-3 text-xl font-extrabold">How can we help?</h2>
-        <p className="mt-1 text-sm opacity-85">Our support team is available Mon–Sat, 8am–7pm EAT.</p>
+        <p className="mt-1 text-sm opacity-85">Our support team is available {info.supportHours}.</p>
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <a href="tel:+254700123456" className="flex items-center justify-center gap-2 rounded-2xl bg-white/15 px-3 py-3 text-sm font-bold backdrop-blur transition hover:bg-white/25">
+          <a href={`tel:${info.supportPhone}`} className="flex items-center justify-center gap-2 rounded-2xl bg-white/15 px-3 py-3 text-sm font-bold backdrop-blur transition hover:bg-white/25">
             <Phone size={15} /> Call us
           </a>
-          <a href="mailto:support@okohela.co.ke" className="flex items-center justify-center gap-2 rounded-2xl bg-white/15 px-3 py-3 text-sm font-bold backdrop-blur transition hover:bg-white/25">
+          <a href={`mailto:${info.supportEmail}`} className="flex items-center justify-center gap-2 rounded-2xl bg-white/15 px-3 py-3 text-sm font-bold backdrop-blur transition hover:bg-white/25">
             <Mail size={15} /> Email
           </a>
         </div>

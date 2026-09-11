@@ -3,9 +3,10 @@ import { prisma } from "@/lib/db";
 import { withApi, ok, requireUser, ApiError, rateLimit } from "@/lib/api";
 import { ref } from "@/lib/transactions/ledger";
 import { toMoney } from "@/lib/loans/engine";
+import { getSettings } from "@/lib/settings";
 
 const bodySchema = z.object({
-  amount: z.number().positive("Enter a valid amount").max(300000, "Maximum withdrawal is KES 300,000"),
+  amount: z.number().positive("Enter a valid amount"),
   mpesaNumber: z
     .string()
     .regex(/^2547\d{8}$|^2541\d{8}$/, "Enter a valid Safaricom number (e.g. 2547XXXXXXXX).")
@@ -20,16 +21,26 @@ export default withApi(async (req, res) => {
   rateLimit(req, "savings-withdraw", 10, 60_000);
   if (req.method !== "POST") throw new ApiError(405, "Method not allowed");
 
+  const settings = await getSettings();
+  if (!settings.withdrawalsEnabled) {
+    throw new ApiError(422, "Withdrawals are temporarily disabled. Please try again later.");
+  }
+
   const parsed = bodySchema.safeParse(req.body);
   if (!parsed.success) throw new ApiError(422, parsed.error.issues[0]?.message ?? "Invalid input", "VALIDATION");
   const amount = Math.round(parsed.data.amount);
+  if (amount > settings.maxSavingsWithdrawal) {
+    throw new ApiError(422, `Maximum withdrawal is KES ${settings.maxSavingsWithdrawal.toLocaleString()}`);
+  }
 
   const account = await prisma.savingsAccount.findUnique({ where: { userId: user.id } });
   const balance = toMoney(account?.balance ?? 0);
   if (!account || amount > balance) {
     throw new ApiError(422, "Insufficient savings balance");
   }
-  if (amount < 50) throw new ApiError(422, "Minimum withdrawal is KES 50");
+  if (amount < settings.minSavingsWithdrawal) {
+    throw new ApiError(422, `Minimum withdrawal is KES ${settings.minSavingsWithdrawal.toLocaleString()}`);
+  }
 
   const open = await prisma.withdrawalRequest.count({
     where: { userId: user.id, status: { in: ["PENDING", "APPROVED"] } },
