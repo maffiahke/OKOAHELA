@@ -42,13 +42,13 @@ export default function Profile() {
   const name = data?.user?.profile?.fullName ?? "Customer";
 
   const menu = [
-    { icon: UserCircle2, label: "Personal Information", path: null },
-    { icon: Wallet, label: "M-Pesa Details", path: null },
+    { icon: UserCircle2, label: "Personal Information", path: "/profile/personal-info" },
+    { icon: Wallet, label: "M-Pesa Details", path: "/profile/mpesa" },
     { icon: History, label: "Loan History", path: "/transactions?category=LOANS" },
     { icon: PiggyBank, label: "Savings History", path: "/transactions?category=SAVINGS" },
     { icon: Bell, label: "Notifications", path: "/notifications" },
     { icon: LifeBuoy, label: "Help & Support", path: "/support" },
-    { icon: Settings, label: "Settings", path: null },
+    { icon: Settings, label: "Settings", path: "/profile/settings" },
   ];
 
   return (

@@ -102,12 +102,14 @@ async function darajaToken(cfg: DarajaConfig): Promise<string> {
   return tokenCache.token;
 }
 
+// Daraja requires Africa/Nairobi (UTC+3) time in exactly yyyyMMddHHmmss —
+// computed from UTC so the server's own timezone can never skew it.
 function stkTimestamp(): string {
-  const d = new Date();
-  const pad = (n: number, w = 2) => String(n).padStart(w, "0");
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const nairobi = new Date(Date.now() + 3 * 60 * 60 * 1000);
   return (
-    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}` +
-    `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}${pad(d.getMilliseconds(), 3)}`
+    `${nairobi.getUTCFullYear()}${pad(nairobi.getUTCMonth() + 1)}${pad(nairobi.getUTCDate())}` +
+    `${pad(nairobi.getUTCHours())}${pad(nairobi.getUTCMinutes())}${pad(nairobi.getUTCSeconds())}`
   );
 }
 
