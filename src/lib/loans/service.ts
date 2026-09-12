@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { quoteLoan, toMoney, computeLoanLimit } from "@/lib/loans/engine";
+import { quoteLoan, toMoney } from "@/lib/loans/engine";
 import { ApiError } from "@/lib/api";
 import { Prisma } from "@prisma/client";
 import { ref } from "@/lib/transactions/ledger";
@@ -36,8 +36,8 @@ export async function applyForLoan(input: ApplyLoanInput) {
   const savings = await prisma.savingsAccount.findUnique({ where: { userId: input.userId } });
   const savingsBalance = toMoney(savings?.balance ?? 0);
 
-  // Rule 1: product requirement — visible to everyone, but locked until the
-  // customer has saved the product's minimum savings amount.
+  // Rule 1: product requirement — locked only when an admin has explicitly
+  // set a minimum savings amount on the product (normally 0 = always open).
   const minSavings = toMoney(product.minSavings);
   if (savingsBalance < minSavings) {
     throw new ApiError(
@@ -49,13 +49,8 @@ export async function applyForLoan(input: ApplyLoanInput) {
     );
   }
 
-  // Rule 2: amount must be within the limit awarded from savings (2× savings,
-  // floored at the KES 250 starter limit).
-  const amount = toMoney(product.amount);
-  const limit = computeLoanLimit(savingsBalance);
-  if (amount > limit) {
-    throw new ApiError(403, `This loan exceeds your limit of KES ${limit.toLocaleString()}.`, "LIMIT_EXCEEDED");
-  }
+  // Loan amounts no longer depend on the savings-based limit — every active
+  // product can be applied for directly.
 
   // Rule 3: no conflicting active loans (single active loan policy).
   const activeLoan = await prisma.loan.findFirst({
@@ -78,7 +73,7 @@ export async function applyForLoan(input: ApplyLoanInput) {
   }
 
   const quote = quoteLoan(
-    amount,
+    toMoney(product.amount),
     toMoney(product.feeRate),
     input.periodMonths,
     new Date(),

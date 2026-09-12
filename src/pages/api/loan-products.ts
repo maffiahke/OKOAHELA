@@ -5,8 +5,8 @@ import { toMoney, calcFee, computeLoanLimit } from "@/lib/loans/engine";
 import { getSessionUser } from "@/lib/auth/guards";
 
 // GET /api/loan-products — active loan products with per-customer unlock
-// state. Every product is visible; products whose savings requirement is not
-// met (or whose amount exceeds the 2× savings limit) come back marked locked.
+// state. Products are unlocked for everyone; a product is only locked if an
+// admin has explicitly set a minimum savings requirement on it.
 export default withApi(async (req: NextApiRequest, res: NextApiResponse) => {
   const [products, user] = await Promise.all([
     prisma.loanProduct.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } }),
@@ -41,9 +41,9 @@ export default withApi(async (req: NextApiRequest, res: NextApiResponse) => {
         description: p.description,
         badge: p.badge,
         minSavings,
-        // Locked when logged out, when the savings requirement is unmet, or
-        // when the product amount is above the awarded limit.
-        locked: !user || savingsBalance < minSavings || amount > limit,
+        // Only locked when logged out or when an admin has set a savings
+        // requirement the customer has not met yet.
+        locked: !user || savingsBalance < minSavings,
       };
     }),
   });

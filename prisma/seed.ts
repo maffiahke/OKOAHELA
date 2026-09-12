@@ -73,7 +73,7 @@ async function main() {
     create: { userId: jay.id, balance: new Prisma.Decimal(4500) },
   });
 
-  // Loan products — minSavings = amount / 2 (2x savings rule), flatFee only on the 250 starter
+  // Loan products — all unlocked (minSavings 0); flatFee only on the 250 starter
   for (let i = 0; i < PRODUCTS.length; i++) {
     const p = PRODUCTS[i];
     const data = {
@@ -81,7 +81,7 @@ async function main() {
       amount: new Prisma.Decimal(p.amount),
       feeRate: new Prisma.Decimal(0.1),
       flatFee: p.flatFee ? new Prisma.Decimal(p.flatFee) : null,
-      minSavings: new Prisma.Decimal(p.amount / 2),
+      minSavings: new Prisma.Decimal(0),
       periodMonths: p.periodMonths,
       periodOptions: p.periodMonths === 1 ? "1" : p.periodMonths === 2 ? "1,2" : "1,2,3,4,6",
       description: p.description,
