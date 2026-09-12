@@ -109,7 +109,7 @@ export default function Dashboard() {
             {firstName} <span className="align-middle">👋</span>
           </h1>
           <p className="mt-1 text-[11px] font-semibold text-yellow-200/80">
-            Every KES 1 saved unlocks KES 2 of credit
+            Apply for any loan — no savings required
           </p>
         </div>
         <button

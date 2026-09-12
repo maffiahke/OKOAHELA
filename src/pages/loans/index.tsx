@@ -40,6 +40,9 @@ export default function LoanProducts() {
   const products = data?.products;
 
   const unlockedCount = products?.filter((p) => !p.locked).length ?? 0;
+  const maxAvailable = products?.length
+    ? Math.max(...products.filter((p) => !p.locked).map((p) => p.amount), 0)
+    : 0;
 
   return (
     <div className="relative min-h-screen bg-white">
@@ -49,7 +52,7 @@ export default function LoanProducts() {
             <BackButton />
             <h1 className="text-2xl font-extrabold tracking-tight text-ink">Loan Products</h1>
           </div>
-          <p className="mt-1 text-sm text-gray-500">Every KES 1 saved unlocks KES 2 of credit</p>
+          <p className="mt-1 text-sm text-gray-500">Apply for any loan — no savings required</p>
         </motion.div>
 
         {/* Limit summary */}
@@ -65,8 +68,8 @@ export default function LoanProducts() {
                 <TrendingUp size={22} className="text-yellow-300" />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">Your loan limit</p>
-                <p className="text-xl font-extrabold text-white drop-shadow-sm">{formatKES(data?.loanLimit ?? 0)}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">Available up to</p>
+                <p className="text-xl font-extrabold text-white drop-shadow-sm">{formatKES(maxAvailable)}</p>
               </div>
             </div>
             <div className="text-right">

@@ -1,13 +1,13 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "@/lib/db";
 import { withApi, ok, requireUser } from "@/lib/api";
-import { toMoney, computeLoanLimit } from "@/lib/loans/engine";
+import { toMoney } from "@/lib/loans/engine";
 
 // GET /api/dashboard — everything the customer home screen needs in one call.
 export default withApi(async (req, res) => {
   const user = await requireUser(req);
 
-  const [profile, savings, activeLoan, notifications, transactions] = await Promise.all([
+  const [profile, savings, activeLoan, notifications, transactions, topProduct] = await Promise.all([
     prisma.customerProfile.findUnique({ where: { userId: user.id } }),
     prisma.savingsAccount.findUnique({ where: { userId: user.id } }),
     prisma.loan.findFirst({
@@ -19,6 +19,10 @@ export default withApi(async (req, res) => {
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
       take: 5,
+    }),
+    prisma.loanProduct.findFirst({
+      where: { active: true },
+      orderBy: { amount: "desc" },
     }),
   ]);
 
@@ -32,7 +36,7 @@ export default withApi(async (req, res) => {
       phone: user.phone,
       kycStatus: profile?.kycStatus ?? "UNVERIFIED",
     },
-    loanLimit: computeLoanLimit(toMoney(savings?.balance ?? 0)),
+    loanLimit: topProduct ? toMoney(topProduct.amount) : 0,
     savingsBalance: toMoney(savings?.balance ?? 0),
     activeLoan: activeLoan
       ? {
